@@ -36,6 +36,12 @@
             "imageWidth": 76
           }
         }
+      ],
+      [
+        "./modules/permission-kit/app.plugin.js",
+        {
+          "permissions": ["batteryOptimization"]
+        }
       ]
     ],
     "experiments": {

@@ -8,5 +8,5 @@
 - [ ] Accessibility
 - [ ] Open Settings Helper
 - [ ] ensure()
-- [ ] Expo Config Plugin
+- [x] Expo Config Plugin
 - [ ] Standalone Package

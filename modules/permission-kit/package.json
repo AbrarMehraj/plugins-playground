@@ -7,6 +7,8 @@
   "types": "build/index.d.ts",
   "files": [
     "build",
+    "plugin/build",
+    "app.plugin.js",
     "src",
     "android",
     "ios",
@@ -15,8 +17,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "../../node_modules/.bin/tsc -p tsconfig.json",
-    "clean": "rm -rf build"
+    "build": "../../node_modules/.bin/tsc -p tsconfig.json && ../../node_modules/.bin/tsc -p plugin/tsconfig.json",
+    "clean": "rm -rf build plugin/build"
   },
   "keywords": [
     "expo",

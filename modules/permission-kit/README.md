@@ -21,33 +21,45 @@ yarn add @abrar/permission-kit
 pnpm add @abrar/permission-kit
 ```
 
-### Expo projects (Managed or Bare)
+## Setup
 
-After installing, run prebuild to link the native module:
+### For Expo Projects (Recommended)
 
+Use the built-in Config Plugin to automatically handle Android permissions. This ensures you only request the permissions you actually use!
+
+In your `app.json`, add the plugin and specify the permissions you want:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "@abrar/permission-kit",
+        {
+          "permissions": ["batteryOptimization"]
+        }
+      ]
+    ]
+  }
+}
+```
+
+Then run:
 ```bash
 npx expo prebuild
 ```
 
-### Bare React Native projects
+### For Bare React Native Projects (Without Expo Prebuild)
 
-The module uses [Expo Modules API](https://docs.expo.dev/modules/overview/) and auto-links via `expo-modules-core`. Ensure your project has `expo-modules-core` installed.
+If you are not using Expo Prebuild, you must manage your `AndroidManifest.xml` manually. 
 
-```bash
-npx pod-install   # iOS
-```
-
----
-
-## Android Setup
-
-Add the required permission to your `AndroidManifest.xml`:
+Add the required permission to your `android/app/src/main/AndroidManifest.xml` ONLY IF you intend to use it:
 
 ```xml
 <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 ```
 
----
+> **Note**: PermissionKit requires Expo Modules architecture. If you are on React Native 0.69+, you likely already have it. Make sure you run `npx pod-install` for iOS.
 
 ## API
 
@@ -97,7 +109,7 @@ const result = await PermissionKit.checkBatteryOptimization();
 - [ ] Exact Alarm (Android)
 - [ ] DND Access (Android)
 - [ ] Overlay Permission (Android)
-- [ ] Expo Config Plugin
+- [x] Expo Config Plugin
 - [ ] Standalone Package
 
 ---
