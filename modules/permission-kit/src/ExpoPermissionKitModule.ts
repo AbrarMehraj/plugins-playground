@@ -1,5 +1,10 @@
-import { NativeModule, requireNativeModule } from 'expo';
+import { requireNativeModule } from 'expo';
 
-declare class ExpoPermissionKitModule extends NativeModule<{}> {}
+export interface PermissionKitNativeModule {
+  isBatteryOptimizationEnabled(): Promise<boolean>;
+  openBatteryOptimizationSettings(): Promise<void>;
+}
 
-export default requireNativeModule<ExpoPermissionKitModule>('ExpoPermissionKit');
+export default requireNativeModule<PermissionKitNativeModule>(
+  'ExpoPermissionKit'
+);
