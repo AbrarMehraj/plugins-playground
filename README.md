@@ -54,4 +54,82 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-# plugins-playground
+
+# Plugins Playground
+
+A development workspace for building, testing, and validating Expo native modules before publishing them as standalone npm packages.
+
+## Goal
+
+This repository serves as a playground for experimenting with Expo Modules and native Android/iOS functionality.
+
+Modules are first developed and tested locally inside this workspace. Once a module is stable and production-ready, it can be extracted into its own repository and published to npm.
+
+## Current Modules
+
+### Permission Kit
+
+A permission management library for Expo and React Native applications.
+
+Vision:
+
+```ts
+await PermissionKit.notifications();
+
+await PermissionKit.batteryOptimization();
+
+await PermissionKit.ensure([
+  'notifications',
+  'batteryOptimization',
+  'exactAlarm',
+]);
+```
+
+The library should handle:
+
+* Permission checks
+* Permission requests
+* Settings navigation
+* App resume detection
+* Status re-checking
+* Error handling
+* Android and iOS platform differences
+
+The goal is to provide a complete permission workflow with minimal integration effort.
+
+## Development Workflow
+
+1. Create and test modules locally.
+2. Validate native Android and iOS behavior.
+3. Improve API design.
+4. Add automated configuration through Expo Config Plugins.
+5. Extract mature modules into standalone repositories.
+6. Publish to npm.
+
+## Planned Modules
+
+* permission-kit
+* screenshot-detector
+* alarm-manager
+* device-utils
+
+## Repository Structure
+
+```text
+plugins-playground/
+├── app/
+├── modules/
+│   ├── permission-kit/
+│   ├── screenshot-detector/
+│   └── future-modules/
+└── README.md
+```
+
+## Philosophy
+
+Developer experience comes first.
+
+A developer should not need to understand platform-specific implementation details to use a module.
+
+The ideal API should require only one or two lines of code while handling all underlying native complexity.
+"""
