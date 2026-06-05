@@ -1,4 +1,4 @@
-# @abrar/permission-kit
+# @abrarmehraj/permission-kit
 
 A developer-friendly permissions library for **Expo** and **React Native**.
 
@@ -14,11 +14,11 @@ const result = await PermissionKit.batteryOptimization();
 ## Installation
 
 ```bash
-npm install @abrar/permission-kit
+npm install @abrarmehraj/permission-kit
 # or
-yarn add @abrar/permission-kit
+yarn add @abrarmehraj/permission-kit
 # or
-pnpm add @abrar/permission-kit
+pnpm add @abrarmehraj/permission-kit
 ```
 
 ## Setup
@@ -34,7 +34,7 @@ In your `app.json`, add the plugin and specify the permissions you want:
   "expo": {
     "plugins": [
       [
-        "@abrar/permission-kit",
+        "@abrarmehraj/permission-kit",
         {
           "permissions": ["batteryOptimization"]
         }
@@ -68,7 +68,7 @@ Add the required permission to your `android/app/src/main/AndroidManifest.xml` O
 Checks if battery optimization is disabled for your app. If not, automatically opens the Android Settings dialog and waits for the user to return. Re-checks on resume.
 
 ```ts
-import { PermissionKit } from '@abrar/permission-kit';
+import { PermissionKit } from '@abrarmehraj/permission-kit';
 
 const result = await PermissionKit.batteryOptimization();
 
