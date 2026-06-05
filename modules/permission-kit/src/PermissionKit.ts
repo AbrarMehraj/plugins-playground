@@ -1,24 +1,25 @@
 import { AppState } from 'react-native';
 import NativeModule from './ExpoPermissionKitModule';
 
-export async function batteryOptimization() {
+export async function checkBatteryOptimization() {
   const enabled = await NativeModule.isBatteryOptimizationEnabled();
+  return {
+    status: enabled ? 'granted' : 'denied',
+  };
+}
 
-  if (enabled) {
-    return {
-      status: 'granted',
-    };
+export async function batteryOptimization() {
+  const check = await checkBatteryOptimization();
+
+  if (check.status === 'granted') {
+    return check;
   }
 
   await NativeModule.openBatteryOptimizationSettings();
 
   await waitForResume();
 
-  const recheck = await NativeModule.isBatteryOptimizationEnabled();
-
-  return {
-    status: recheck ? 'granted' : 'denied',
-  };
+  return await checkBatteryOptimization();
 }
 
 function waitForResume(): Promise<void> {
@@ -38,4 +39,5 @@ function waitForResume(): Promise<void> {
 
 export const PermissionKit = {
   batteryOptimization,
+  checkBatteryOptimization,
 };
