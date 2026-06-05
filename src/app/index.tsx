@@ -11,11 +11,8 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function HomeScreen() {
 
-
-
   const test = async () => {
     const result = await PermissionKit.batteryOptimization();
-    console.log(result);
   };
 
   return (

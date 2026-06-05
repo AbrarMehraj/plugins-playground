@@ -36,6 +36,13 @@ class ExpoPermissionKitModule : Module() {
       val packageName = context.packageName
 
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+            context, 
+            android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+          ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+          throw Exception("MISSING_PERMISSION: Add batteryOptimization to your app.json plugin")
+        }
+
         val intent = Intent(
           Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
           Uri.parse("package:$packageName")

@@ -22,7 +22,17 @@ export async function batteryOptimization() {
     return check;
   }
 
-  await NativeModule.openBatteryOptimizationSettings();
+  try {
+    await NativeModule.openBatteryOptimizationSettings();
+  } catch (error: any) {
+    if (error?.message?.includes('MISSING_PERMISSION')) {
+      console.warn(
+        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'batteryOptimization' to your app.json plugin."
+      );
+      return { status: 'denied' as const };
+    }
+    throw error;
+  }
 
   await waitForResume();
 
