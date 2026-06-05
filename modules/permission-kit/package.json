@@ -1,0 +1,44 @@
+{
+  "name": "@abrar/permission-kit",
+  "version": "0.1.0",
+  "description": "A developer-friendly permissions library for Expo and React Native. One call handles the full workflow — check, request, wait for app resume, return final status.",
+  "main": "build/index.js",
+  "module": "build/index.js",
+  "types": "build/index.d.ts",
+  "files": [
+    "build",
+    "src",
+    "android",
+    "ios",
+    "expo-module.config.json",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "../../node_modules/.bin/tsc -p tsconfig.json",
+    "clean": "rm -rf build"
+  },
+  "keywords": [
+    "expo",
+    "react-native",
+    "permissions",
+    "android",
+    "battery",
+    "battery-optimization",
+    "expo-module"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AbrarMehraj/plugins-playground"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "expo": ">=50.0.0",
+    "react": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "@types/react": "~19.2.2"
+  }
+}

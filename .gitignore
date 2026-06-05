@@ -49,3 +49,5 @@ modules/*/android/.gradle
 modules/*/ios/build
 modules/*/ios/Pods
 modules/*/build
+modules/permission-kit/build/
+modules/permission-kit/node_modules/

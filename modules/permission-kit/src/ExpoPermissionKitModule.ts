@@ -5,6 +5,11 @@ export interface PermissionKitNativeModule {
   openBatteryOptimizationSettings(): Promise<void>;
 }
 
-export default requireNativeModule<PermissionKitNativeModule>(
-  'ExpoPermissionKit'
-);
+let _nativeModule: PermissionKitNativeModule | null = null;
+try {
+  _nativeModule = requireNativeModule<PermissionKitNativeModule>('ExpoPermissionKit');
+} catch {
+  // Native module not available on this platform (e.g., iOS simulator, web)
+}
+
+export default _nativeModule;

@@ -1,14 +1,21 @@
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import NativeModule from './ExpoPermissionKitModule';
 
 export async function checkBatteryOptimization() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
   const enabled = await NativeModule.isBatteryOptimizationEnabled();
   return {
-    status: enabled ? 'granted' : 'denied',
+    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
   };
 }
 
 export async function batteryOptimization() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+
   const check = await checkBatteryOptimization();
 
   if (check.status === 'granted') {
