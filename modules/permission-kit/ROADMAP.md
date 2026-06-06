@@ -1,10 +1,10 @@
 # PermissionKit Roadmap
 
 - [x] Battery Optimization
+- [x] Overlay Permission
 - [ ] Notifications
 - [ ] Exact Alarm
 - [ ] DND Access
-- [ ] Overlay Permission
 - [ ] Accessibility
 - [ ] Open Settings Helper
 - [ ] ensure()

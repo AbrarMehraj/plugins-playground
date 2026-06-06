@@ -54,7 +54,47 @@ function waitForResume(): Promise<void> {
   });
 }
 
+export async function checkOverlay() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+  const enabled = await NativeModule.isOverlayPermissionEnabled();
+  return {
+    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
+  };
+}
+
+export async function overlay() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+
+  const check = await checkOverlay();
+
+  if (check.status === 'granted') {
+    return check;
+  }
+
+  try {
+    await NativeModule.openOverlayPermissionSettings();
+  } catch (error: any) {
+    if (error?.message?.includes('MISSING_PERMISSION')) {
+      console.warn(
+        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'overlay' to your app.json plugin."
+      );
+      return { status: 'denied' as const };
+    }
+    throw error;
+  }
+
+  await waitForResume();
+
+  return await checkOverlay();
+}
+
 export const PermissionKit = {
   batteryOptimization,
   checkBatteryOptimization,
+  overlay,
+  checkOverlay,
 };

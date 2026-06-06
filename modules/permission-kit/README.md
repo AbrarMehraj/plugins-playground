@@ -36,7 +36,7 @@ In your `app.json`, add the plugin and specify the permissions you want:
       [
         "@abrarmehraj/permission-kit",
         {
-          "permissions": ["batteryOptimization"]
+          "permissions": ["batteryOptimization", "overlay"]
         }
       ]
     ]
@@ -57,6 +57,7 @@ Add the required permission to your `android/app/src/main/AndroidManifest.xml` O
 
 ```xml
 <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 ```
 
 > **Note**: PermissionKit requires Expo Modules architecture. If you are on React Native 0.69+, you likely already have it. Make sure you run `npx pod-install` for iOS.
@@ -90,6 +91,26 @@ const result = await PermissionKit.checkBatteryOptimization();
 // Use on app start to know the current state
 ```
 
+### `PermissionKit.overlay()`
+
+Checks if the app is allowed to draw over other apps (System Alert Window). If not, automatically opens the Android Settings "Display over other apps" dialog, waits for the user to return, and re-checks on resume.
+
+```ts
+const result = await PermissionKit.overlay();
+
+if (result.status === 'granted') {
+  // App is allowed to draw over others
+}
+```
+
+### `PermissionKit.checkOverlay()`
+
+Check the current overlay status without opening settings.
+
+```ts
+const result = await PermissionKit.checkOverlay();
+```
+
 ---
 
 ## Platform Support
@@ -97,6 +118,7 @@ const result = await PermissionKit.checkBatteryOptimization();
 | Feature               | Android | iOS              |
 |-----------------------|---------|------------------|
 | Battery Optimization  | ✅      | `unavailable` ⚠️ |
+| Overlay Permission    | ✅      | `unavailable` ⚠️ |
 
 > **iOS Note**: iOS does not have Android-style battery optimization. Calling `batteryOptimization()` on iOS immediately returns `{ status: 'unavailable' }` without showing any UI.
 
@@ -105,10 +127,10 @@ const result = await PermissionKit.checkBatteryOptimization();
 ## Roadmap
 
 - [x] Battery Optimization (Android)
+- [x] Overlay Permission (Android)
 - [ ] Notifications (Android + iOS)
 - [ ] Exact Alarm (Android)
 - [ ] DND Access (Android)
-- [ ] Overlay Permission (Android)
 - [x] Expo Config Plugin
 - [ ] Standalone Package
 

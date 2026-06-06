@@ -10,6 +10,16 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class ExpoPermissionKitModule : Module() {
+  private fun hasManifestPermission(permission: String): Boolean {
+    val context = appContext.reactContext ?: return false
+    return try {
+      val packageInfo = context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_PERMISSIONS)
+      packageInfo.requestedPermissions?.contains(permission) == true
+    } catch (e: Exception) {
+      false
+    }
+  }
+
   override fun definition() = ModuleDefinition {
     Name("ExpoPermissionKit")
 
@@ -36,15 +46,43 @@ class ExpoPermissionKitModule : Module() {
       val packageName = context.packageName
 
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(
-            context, 
-            android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-          ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (!hasManifestPermission(android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)) {
           throw Exception("MISSING_PERMISSION: Add batteryOptimization to your app.json plugin")
         }
 
         val intent = Intent(
           Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+          Uri.parse("package:$packageName")
+        )
+
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+      }
+    }
+
+    AsyncFunction("isOverlayPermissionEnabled") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        return@AsyncFunction Settings.canDrawOverlays(context)
+      }
+      return@AsyncFunction true
+    }
+
+    AsyncFunction("openOverlayPermissionSettings") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      val packageName = context.packageName
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (!hasManifestPermission(android.Manifest.permission.SYSTEM_ALERT_WINDOW)) {
+          throw Exception("MISSING_PERMISSION: Add 'overlay' to your app.json plugin")
+        }
+
+        val intent = Intent(
+          Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
           Uri.parse("package:$packageName")
         )
 

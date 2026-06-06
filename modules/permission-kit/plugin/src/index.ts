@@ -10,7 +10,7 @@ const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
 ) => {
   const permissions = props?.permissions || [];
 
-  if (permissions.includes('batteryOptimization')) {
+  if (permissions.includes('batteryOptimization') || permissions.includes('overlay')) {
     config = withAndroidManifest(config, (config) => {
       const androidManifest = config.modResults;
       if (!androidManifest.manifest['uses-permission']) {
@@ -22,17 +22,23 @@ const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
       );
 
       if (
-        !existingPermissions.includes(
-          'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS'
-        )
+        permissions.includes('batteryOptimization') &&
+        !existingPermissions.includes('android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS')
       ) {
         androidManifest.manifest['uses-permission'].push({
-          $: {
-            'android:name':
-              'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
-          },
+          $: { 'android:name': 'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS' },
         });
       }
+
+      if (
+        permissions.includes('overlay') &&
+        !existingPermissions.includes('android.permission.SYSTEM_ALERT_WINDOW')
+      ) {
+        androidManifest.manifest['uses-permission'].push({
+          $: { 'android:name': 'android.permission.SYSTEM_ALERT_WINDOW' },
+        });
+      }
+
       return config;
     });
   }

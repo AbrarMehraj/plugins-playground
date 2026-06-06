@@ -13,6 +13,12 @@ export default function HomeScreen() {
 
   const test = async () => {
     const result = await PermissionKit.batteryOptimization();
+    console.log("Battery Result:", result);
+  };
+
+  const testOverlay = async () => {
+    const result = await PermissionKit.overlay();
+    console.log("Overlay Result:", result);
   };
 
   return (
@@ -31,6 +37,7 @@ export default function HomeScreen() {
 
 
         <Button title="Battery Optimization" onPress={test} />
+        <Button title="Overlay Permission" onPress={testOverlay} />
 
         {Platform.OS === 'web' && <WebBadge />}
       </SafeAreaView>
