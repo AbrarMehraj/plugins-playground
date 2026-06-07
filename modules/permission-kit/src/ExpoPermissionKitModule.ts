@@ -5,6 +5,8 @@ export interface PermissionKitNativeModule {
   openBatteryOptimizationSettings(): Promise<void>;
   isOverlayPermissionEnabled(): Promise<boolean>;
   openOverlayPermissionSettings(): Promise<void>;
+  isExactAlarmPermissionEnabled(): Promise<boolean>;
+  openExactAlarmSettings(): Promise<void>;
 }
 
 let _nativeModule: PermissionKitNativeModule | null = null;

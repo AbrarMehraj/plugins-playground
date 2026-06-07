@@ -21,6 +21,11 @@ export default function HomeScreen() {
     console.log("Overlay Result:", result);
   };
 
+  const testExactAlarm = async () => {
+    const result = await PermissionKit.exactAlarm();
+    console.log("Exact Alarm Result:", result);
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -38,6 +43,7 @@ export default function HomeScreen() {
 
         <Button title="Battery Optimization" onPress={test} />
         <Button title="Overlay Permission" onPress={testOverlay} />
+        <Button title="Exact Alarm" onPress={testExactAlarm} />
 
         {Platform.OS === 'web' && <WebBadge />}
       </SafeAreaView>

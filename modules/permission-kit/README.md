@@ -36,7 +36,7 @@ In your `app.json`, add the plugin and specify the permissions you want:
       [
         "@abrarmehraj/permission-kit",
         {
-          "permissions": ["batteryOptimization", "overlay"]
+          "permissions": ["batteryOptimization", "overlay", "exactAlarm"]
         }
       ]
     ]
@@ -58,6 +58,7 @@ Add the required permission to your `android/app/src/main/AndroidManifest.xml` O
 ```xml
 <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 ```
 
 > **Note**: PermissionKit requires Expo Modules architecture. If you are on React Native 0.69+, you likely already have it. Make sure you run `npx pod-install` for iOS.
@@ -111,6 +112,26 @@ Check the current overlay status without opening settings.
 const result = await PermissionKit.checkOverlay();
 ```
 
+### `PermissionKit.exactAlarm()`
+
+Checks if the app is allowed to schedule exact alarms (Android 14+ requirement). If not, automatically opens the Android Settings "Alarms & Reminders" dialog, waits for the user to return, and re-checks on resume.
+
+```ts
+const result = await PermissionKit.exactAlarm();
+
+if (result.status === 'granted') {
+  // App is allowed to schedule exact alarms
+}
+```
+
+### `PermissionKit.checkExactAlarm()`
+
+Check the current exact alarm status without opening settings.
+
+```ts
+const result = await PermissionKit.checkExactAlarm();
+```
+
 ---
 
 ## Platform Support
@@ -119,6 +140,7 @@ const result = await PermissionKit.checkOverlay();
 |-----------------------|---------|------------------|
 | Battery Optimization  | ✅      | `unavailable` ⚠️ |
 | Overlay Permission    | ✅      | `unavailable` ⚠️ |
+| Exact Alarm           | ✅      | `unavailable` ⚠️ |
 
 > **iOS Note**: iOS does not have Android-style battery optimization. Calling `batteryOptimization()` on iOS immediately returns `{ status: 'unavailable' }` without showing any UI.
 
@@ -128,8 +150,8 @@ const result = await PermissionKit.checkOverlay();
 
 - [x] Battery Optimization (Android)
 - [x] Overlay Permission (Android)
+- [x] Exact Alarm (Android)
 - [ ] Notifications (Android + iOS)
-- [ ] Exact Alarm (Android)
 - [ ] DND Access (Android)
 - [x] Expo Config Plugin
 - [ ] Standalone Package

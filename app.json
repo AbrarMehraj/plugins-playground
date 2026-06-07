@@ -40,7 +40,11 @@
       [
         "./modules/permission-kit/app.plugin.js",
         {
-          "permissions": ["batteryOptimization", "overlay"]
+          "permissions": [
+            "batteryOptimization",
+            "overlay",
+            "exactAlarm"
+          ]
         }
       ]
     ],

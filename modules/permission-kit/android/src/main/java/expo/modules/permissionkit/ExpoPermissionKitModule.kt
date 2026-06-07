@@ -90,5 +90,37 @@ class ExpoPermissionKitModule : Module() {
         context.startActivity(intent)
       }
     }
+
+    AsyncFunction("isExactAlarmPermissionEnabled") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+        return@AsyncFunction alarmManager.canScheduleExactAlarms()
+      }
+      return@AsyncFunction true
+    }
+
+    AsyncFunction("openExactAlarmSettings") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      val packageName = context.packageName
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (!hasManifestPermission(android.Manifest.permission.SCHEDULE_EXACT_ALARM)) {
+          throw Exception("MISSING_PERMISSION: Add 'exactAlarm' to your app.json plugin")
+        }
+
+        val intent = Intent(
+          Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+          Uri.parse("package:$packageName")
+        )
+
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+      }
+    }
   }
 }

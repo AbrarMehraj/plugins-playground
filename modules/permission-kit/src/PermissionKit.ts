@@ -92,9 +92,49 @@ export async function overlay() {
   return await checkOverlay();
 }
 
+export async function checkExactAlarm() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+  const enabled = await NativeModule.isExactAlarmPermissionEnabled();
+  return {
+    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
+  };
+}
+
+export async function exactAlarm() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+
+  const check = await checkExactAlarm();
+
+  if (check.status === 'granted') {
+    return check;
+  }
+
+  try {
+    await NativeModule.openExactAlarmSettings();
+  } catch (error: any) {
+    if (error?.message?.includes('MISSING_PERMISSION')) {
+      console.warn(
+        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'exactAlarm' to your app.json plugin."
+      );
+      return { status: 'denied' as const };
+    }
+    throw error;
+  }
+
+  await waitForResume();
+
+  return await checkExactAlarm();
+}
+
 export const PermissionKit = {
   batteryOptimization,
   checkBatteryOptimization,
   overlay,
   checkOverlay,
+  exactAlarm,
+  checkExactAlarm,
 };

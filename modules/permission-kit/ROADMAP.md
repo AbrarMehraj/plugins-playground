@@ -2,8 +2,8 @@
 
 - [x] Battery Optimization
 - [x] Overlay Permission
+- [x] Exact Alarm
 - [ ] Notifications
-- [ ] Exact Alarm
 - [ ] DND Access
 - [ ] Accessibility
 - [ ] Open Settings Helper
