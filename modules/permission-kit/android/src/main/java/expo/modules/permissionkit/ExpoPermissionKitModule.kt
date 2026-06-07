@@ -122,5 +122,40 @@ class ExpoPermissionKitModule : Module() {
         context.startActivity(intent)
       }
     }
+
+    AsyncFunction("isAccessibilityPermissionEnabled") { serviceName: String ->
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      val enabledServicesSetting = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+      ) ?: return@AsyncFunction false
+
+      val pkg = context.packageName
+      val cls = if (serviceName.startsWith(".")) pkg + serviceName else serviceName
+      val myServiceComponent = android.content.ComponentName(pkg, cls)
+      
+      val colonSplitter = android.text.TextUtils.SimpleStringSplitter(':')
+      colonSplitter.setString(enabledServicesSetting)
+
+      while (colonSplitter.hasNext()) {
+        val componentNameString = colonSplitter.next()
+        val enabledService = android.content.ComponentName.unflattenFromString(componentNameString)
+        if (enabledService != null && enabledService == myServiceComponent) {
+          return@AsyncFunction true
+        }
+      }
+      return@AsyncFunction false
+    }
+
+    AsyncFunction("openAccessibilitySettings") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      context.startActivity(intent)
+    }
   }
 }

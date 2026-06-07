@@ -26,6 +26,13 @@ export default function HomeScreen() {
     console.log("Exact Alarm Result:", result);
   };
 
+  const testAccessibility = async () => {
+    const result = await PermissionKit.accessibility({
+      androidServicePath: ".MockAccessibilityService"
+    });
+    console.log("Accessibility Result:", result);
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -44,6 +51,7 @@ export default function HomeScreen() {
         <Button title="Battery Optimization" onPress={test} />
         <Button title="Overlay Permission" onPress={testOverlay} />
         <Button title="Exact Alarm" onPress={testExactAlarm} />
+        <Button title="Accessibility Service" onPress={testAccessibility} />
 
         {Platform.OS === 'web' && <WebBadge />}
       </SafeAreaView>

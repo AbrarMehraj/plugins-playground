@@ -130,6 +130,37 @@ export async function exactAlarm() {
   return await checkExactAlarm();
 }
 
+export interface AccessibilityOptions {
+  androidServicePath: string;
+}
+
+export async function checkAccessibility(options: AccessibilityOptions) {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+  const enabled = await NativeModule.isAccessibilityPermissionEnabled(options.androidServicePath);
+  return {
+    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
+  };
+}
+
+export async function accessibility(options: AccessibilityOptions) {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+
+  const check = await checkAccessibility(options);
+
+  if (check.status === 'granted') {
+    return check;
+  }
+
+  await NativeModule.openAccessibilitySettings();
+  await waitForResume();
+
+  return await checkAccessibility(options);
+}
+
 export const PermissionKit = {
   batteryOptimization,
   checkBatteryOptimization,
@@ -137,4 +168,6 @@ export const PermissionKit = {
   checkOverlay,
   exactAlarm,
   checkExactAlarm,
+  accessibility,
+  checkAccessibility,
 };
