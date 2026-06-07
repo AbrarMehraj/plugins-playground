@@ -33,6 +33,11 @@ export default function HomeScreen() {
     console.log("Accessibility Result:", result);
   };
 
+  const testDndAccess = async () => {
+    const result = await PermissionKit.dndAccess();
+    console.log("DND Access Result:", result);
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -52,6 +57,7 @@ export default function HomeScreen() {
         <Button title="Overlay Permission" onPress={testOverlay} />
         <Button title="Exact Alarm" onPress={testExactAlarm} />
         <Button title="Accessibility Service" onPress={testAccessibility} />
+        <Button title="DND Access" onPress={testDndAccess} />
 
         {Platform.OS === 'web' && <WebBadge />}
       </SafeAreaView>

@@ -157,5 +157,31 @@ class ExpoPermissionKitModule : Module() {
       intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       context.startActivity(intent)
     }
+
+    AsyncFunction("isDndAccessPermissionEnabled") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        return@AsyncFunction notificationManager.isNotificationPolicyAccessGranted
+      }
+      return@AsyncFunction true
+    }
+
+    AsyncFunction("openDndAccessSettings") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (!hasManifestPermission(android.Manifest.permission.ACCESS_NOTIFICATION_POLICY)) {
+          throw Exception("MISSING_PERMISSION: Add 'dndAccess' to your app.json plugin")
+        }
+
+        val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+      }
+    }
   }
 }

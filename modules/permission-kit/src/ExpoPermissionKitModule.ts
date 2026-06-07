@@ -9,6 +9,8 @@ export interface PermissionKitNativeModule {
   openExactAlarmSettings(): Promise<void>;
   isAccessibilityPermissionEnabled(serviceName: string): Promise<boolean>;
   openAccessibilitySettings(): Promise<void>;
+  isDndAccessPermissionEnabled(): Promise<boolean>;
+  openDndAccessSettings(): Promise<void>;
 }
 
 let _nativeModule: PermissionKitNativeModule | null = null;

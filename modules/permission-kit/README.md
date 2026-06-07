@@ -158,6 +158,26 @@ const result = await PermissionKit.checkAccessibility({
 });
 ```
 
+### `PermissionKit.dndAccess()`
+
+Checks if the app is allowed to modify Do Not Disturb (Notification Policy Access). If not, automatically opens the Android Settings "Do Not Disturb access" dialog, waits for the user to return, and re-checks on resume.
+
+```ts
+const result = await PermissionKit.dndAccess();
+
+if (result.status === 'granted') {
+  // App can now mute the phone or change DND rules
+}
+```
+
+### `PermissionKit.checkDndAccess()`
+
+Check the current DND access status without opening settings.
+
+```ts
+const result = await PermissionKit.checkDndAccess();
+```
+
 ---
 
 ## Platform Support
@@ -168,6 +188,7 @@ const result = await PermissionKit.checkAccessibility({
 | Overlay Permission    | ✅      | `unavailable` ⚠️ |
 | Exact Alarm           | ✅      | `unavailable` ⚠️ |
 | Accessibility Service | ✅      | `unavailable` ⚠️ |
+| Do Not Disturb Access | ✅      | `unavailable` ⚠️ |
 
 > **iOS Note**: iOS does not have Android-style equivalents for these system-level permissions. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI.
 
@@ -179,8 +200,10 @@ const result = await PermissionKit.checkAccessibility({
 - [x] Overlay Permission (Android)
 - [x] Exact Alarm (Android)
 - [x] Accessibility Service (Android)
+- [x] Do Not Disturb Access (Android)
 - [ ] Notifications (Android + iOS)
-- [ ] DND Access (Android)
+- [ ] Open Settings Helper
+- [ ] ensure()
 - [x] Expo Config Plugin
 - [ ] Standalone Package
 

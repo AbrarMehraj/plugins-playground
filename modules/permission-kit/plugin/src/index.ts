@@ -13,7 +13,8 @@ const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
   if (
     permissions.includes('batteryOptimization') ||
     permissions.includes('overlay') ||
-    permissions.includes('exactAlarm')
+    permissions.includes('exactAlarm') ||
+    permissions.includes('dndAccess')
   ) {
     config = withAndroidManifest(config, (config) => {
       const androidManifest = config.modResults;
@@ -49,6 +50,15 @@ const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
       ) {
         androidManifest.manifest['uses-permission'].push({
           $: { 'android:name': 'android.permission.SCHEDULE_EXACT_ALARM' },
+        });
+      }
+
+      if (
+        permissions.includes('dndAccess') &&
+        !existingPermissions.includes('android.permission.ACCESS_NOTIFICATION_POLICY')
+      ) {
+        androidManifest.manifest['uses-permission'].push({
+          $: { 'android:name': 'android.permission.ACCESS_NOTIFICATION_POLICY' },
         });
       }
 

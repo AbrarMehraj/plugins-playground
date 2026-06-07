@@ -5,7 +5,8 @@ const withPermissionKit = (config, props) => {
     const permissions = (props === null || props === void 0 ? void 0 : props.permissions) || [];
     if (permissions.includes('batteryOptimization') ||
         permissions.includes('overlay') ||
-        permissions.includes('exactAlarm')) {
+        permissions.includes('exactAlarm') ||
+        permissions.includes('dndAccess')) {
         config = (0, config_plugins_1.withAndroidManifest)(config, (config) => {
             const androidManifest = config.modResults;
             if (!androidManifest.manifest['uses-permission']) {
@@ -28,6 +29,12 @@ const withPermissionKit = (config, props) => {
                 !existingPermissions.includes('android.permission.SCHEDULE_EXACT_ALARM')) {
                 androidManifest.manifest['uses-permission'].push({
                     $: { 'android:name': 'android.permission.SCHEDULE_EXACT_ALARM' },
+                });
+            }
+            if (permissions.includes('dndAccess') &&
+                !existingPermissions.includes('android.permission.ACCESS_NOTIFICATION_POLICY')) {
+                androidManifest.manifest['uses-permission'].push({
+                    $: { 'android:name': 'android.permission.ACCESS_NOTIFICATION_POLICY' },
                 });
             }
             return config;

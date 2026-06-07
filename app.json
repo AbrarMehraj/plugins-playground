@@ -43,7 +43,8 @@
           "permissions": [
             "batteryOptimization",
             "overlay",
-            "exactAlarm"
+            "exactAlarm",
+            "dndAccess"
           ]
         }
       ]

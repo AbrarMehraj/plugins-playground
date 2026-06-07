@@ -161,6 +161,44 @@ export async function accessibility(options: AccessibilityOptions) {
   return await checkAccessibility(options);
 }
 
+export async function checkDndAccess() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+  const enabled = await NativeModule.isDndAccessPermissionEnabled();
+  return {
+    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
+  };
+}
+
+export async function dndAccess() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+
+  const check = await checkDndAccess();
+
+  if (check.status === 'granted') {
+    return check;
+  }
+
+  try {
+    await NativeModule.openDndAccessSettings();
+  } catch (error: any) {
+    if (error?.message?.includes('MISSING_PERMISSION')) {
+      console.warn(
+        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'dndAccess' to your app.json plugin."
+      );
+      return { status: 'denied' as const };
+    }
+    throw error;
+  }
+
+  await waitForResume();
+
+  return await checkDndAccess();
+}
+
 export const PermissionKit = {
   batteryOptimization,
   checkBatteryOptimization,
@@ -170,4 +208,6 @@ export const PermissionKit = {
   checkExactAlarm,
   accessibility,
   checkAccessibility,
+  dndAccess,
+  checkDndAccess,
 };
