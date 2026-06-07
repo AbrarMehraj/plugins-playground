@@ -1,12 +1,14 @@
 # PermissionKit Roadmap
+## Done
+- [x] Battery Optimization (Android)
+- [x] Overlay Permission (Android)
+- [x] Exact Alarm (Android)
+- [x] Accessibility Service (Android)
+- [x] Expo Config Plugin
 
-- [x] Battery Optimization
-- [x] Overlay Permission
-- [x] Exact Alarm
+## To Do
 - [ ] Notifications
-- [ ] DND Access
-- [ ] Accessibility
+- [ ] Do Not Disturb Access (Android)
 - [ ] Open Settings Helper
 - [ ] ensure()
-- [x] Expo Config Plugin
 - [ ] Standalone Package

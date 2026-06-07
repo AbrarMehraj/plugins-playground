@@ -132,6 +132,32 @@ Check the current exact alarm status without opening settings.
 const result = await PermissionKit.checkExactAlarm();
 ```
 
+### `PermissionKit.accessibility({ androidServicePath })`
+
+Checks if a specific Accessibility Service is enabled. If not, automatically opens the Android Accessibility Settings dialog, waits for the user to return, and re-checks on resume.
+
+> **Note**: Your app must actually define an Accessibility Service in its `AndroidManifest.xml` to appear in the settings list!
+
+```ts
+const result = await PermissionKit.accessibility({
+  androidServicePath: "com.myapp.MyAccessibilityService" // or ".MyAccessibilityService"
+});
+
+if (result.status === 'granted') {
+  // Service is active
+}
+```
+
+### `PermissionKit.checkAccessibility({ androidServicePath })`
+
+Check the current accessibility service status without opening settings.
+
+```ts
+const result = await PermissionKit.checkAccessibility({
+  androidServicePath: ".MyAccessibilityService"
+});
+```
+
 ---
 
 ## Platform Support
@@ -141,8 +167,9 @@ const result = await PermissionKit.checkExactAlarm();
 | Battery Optimization  | ✅      | `unavailable` ⚠️ |
 | Overlay Permission    | ✅      | `unavailable` ⚠️ |
 | Exact Alarm           | ✅      | `unavailable` ⚠️ |
+| Accessibility Service | ✅      | `unavailable` ⚠️ |
 
-> **iOS Note**: iOS does not have Android-style battery optimization. Calling `batteryOptimization()` on iOS immediately returns `{ status: 'unavailable' }` without showing any UI.
+> **iOS Note**: iOS does not have Android-style equivalents for these system-level permissions. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI.
 
 ---
 
@@ -151,6 +178,7 @@ const result = await PermissionKit.checkExactAlarm();
 - [x] Battery Optimization (Android)
 - [x] Overlay Permission (Android)
 - [x] Exact Alarm (Android)
+- [x] Accessibility Service (Android)
 - [ ] Notifications (Android + iOS)
 - [ ] DND Access (Android)
 - [x] Expo Config Plugin
