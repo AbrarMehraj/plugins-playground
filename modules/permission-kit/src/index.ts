@@ -1,2 +1,3 @@
+export { LocationResult, PermissionKit } from './PermissionKit';
 export * from './types';
-export { PermissionKit } from './PermissionKit';
+

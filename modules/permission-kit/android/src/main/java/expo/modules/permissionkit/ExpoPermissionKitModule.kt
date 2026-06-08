@@ -10,10 +10,90 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 
+import com.google.android.gms.common.api.ResolvableApiException
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
+import com.google.android.gms.location.Priority
+import android.app.Activity
+
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class ExpoPermissionKitModule : Module() {
+
+  private var pendingLocationPromise: expo.modules.kotlin.Promise? = null
+  private var pendingLocationTimeoutMs: Int = 10000
+  private val LOCATION_SETTINGS_REQUEST_CODE = 9991
+
+  private fun fetchCoordinates(timeoutMs: Int, promise: expo.modules.kotlin.Promise) {
+    val context = appContext.reactContext ?: return
+    val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+    var settled = false
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    val timeoutRunnable = Runnable {
+      if (!settled) {
+        settled = true
+        locationManager.removeUpdates(object : LocationListener {
+          override fun onLocationChanged(l: Location) {}
+        })
+        promise.resolve(mapOf("status" to "granted", "error" to "TIMEOUT"))
+      }
+    }
+    handler.postDelayed(timeoutRunnable, timeoutMs.toLong())
+
+    val listener = object : LocationListener {
+      override fun onLocationChanged(location: Location) {
+        if (settled) return
+        settled = true
+        handler.removeCallbacks(timeoutRunnable)
+        locationManager.removeUpdates(this)
+        promise.resolve(mapOf(
+          "status" to "granted",
+          "latitude" to location.latitude,
+          "longitude" to location.longitude,
+          "accuracy" to location.accuracy.toDouble(),
+          "altitude" to location.altitude,
+          "timestamp" to location.time.toDouble()
+        ))
+      }
+
+      override fun onProviderDisabled(provider: String) {
+        if (settled) return
+        settled = true
+        handler.removeCallbacks(timeoutRunnable)
+        locationManager.removeUpdates(this)
+        promise.resolve(mapOf("status" to "granted", "error" to "LOCATION_UNAVAILABLE"))
+      }
+
+      @Deprecated("Deprecated in Java")
+      override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+    }
+
+    val provider = when {
+      locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+      locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+      else -> null
+    }
+
+    if (provider == null) {
+      settled = true
+      handler.removeCallbacks(timeoutRunnable)
+      promise.resolve(mapOf("status" to "granted", "error" to "LOCATION_UNAVAILABLE"))
+      return
+    }
+
+    try {
+      handler.post {
+        locationManager.requestLocationUpdates(provider, 0L, 0f, listener)
+      }
+    } catch (e: SecurityException) {
+      settled = true
+      handler.removeCallbacks(timeoutRunnable)
+      promise.resolve(mapOf("status" to "denied", "canAskAgain" to false))
+    }
+  }
   private fun hasManifestPermission(permission: String): Boolean {
     val context = appContext.reactContext ?: return false
     return try {
@@ -26,6 +106,21 @@ class ExpoPermissionKitModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("ExpoPermissionKit")
+
+    OnActivityResult { _, payload ->
+      if (payload.requestCode == LOCATION_SETTINGS_REQUEST_CODE) {
+        val promise = pendingLocationPromise
+        val timeoutMs = pendingLocationTimeoutMs
+        pendingLocationPromise = null
+        if (promise == null) return@OnActivityResult
+
+        if (payload.resultCode == Activity.RESULT_OK) {
+          fetchCoordinates(timeoutMs, promise)
+        } else {
+          promise.resolve(mapOf("status" to "denied", "error" to "LOCATION_SERVICES_DISABLED"))
+        }
+      }
+    }
 
     AsyncFunction("isBatteryOptimizationEnabled") {
       val context = appContext.reactContext
@@ -293,24 +388,10 @@ class ExpoPermissionKitModule : Module() {
       )
     }
 
-    AsyncFunction("requestLocation") { timeoutMs: Int, promise: expo.modules.kotlin.Promise ->
+        AsyncFunction("requestLocation") { timeoutMs: Int, promise: expo.modules.kotlin.Promise ->
       val context = appContext.reactContext ?: throw Exception("Context unavailable")
-      val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
-
-      // 1. Check system-level Location Services
-      val servicesEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        locationManager.isLocationEnabled
-      } else {
-        locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-          locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-      }
-
-      if (!servicesEnabled) {
-        promise.resolve(mapOf("status" to "denied", "error" to "LOCATION_SERVICES_DISABLED"))
-        return@AsyncFunction
-      }
-
-      // 2. Request runtime permission
+      
+      // 1. Request runtime permission first
       val permissionsManager = appContext.permissions
       if (permissionsManager == null) {
         promise.reject("E_NO_PERMISSIONS", "Permissions module is null", null)
@@ -330,72 +411,51 @@ class ExpoPermissionKitModule : Module() {
             return@askForPermissions
           }
 
-          // 3. Permission granted — fetch coordinates
-          var settled = false
-          val handler = android.os.Handler(android.os.Looper.getMainLooper())
-
-          // Timeout runnable
-          val timeoutRunnable = Runnable {
-            if (!settled) {
-              settled = true
-              locationManager.removeUpdates(object : LocationListener {
-                override fun onLocationChanged(l: Location) {}
-              })
-              promise.resolve(mapOf("status" to "granted", "error" to "TIMEOUT"))
-            }
-          }
-          handler.postDelayed(timeoutRunnable, timeoutMs.toLong())
-
-          val listener = object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-              if (settled) return
-              settled = true
-              handler.removeCallbacks(timeoutRunnable)
-              locationManager.removeUpdates(this)
-              promise.resolve(mapOf(
-                "status" to "granted",
-                "latitude" to location.latitude,
-                "longitude" to location.longitude,
-                "accuracy" to location.accuracy.toDouble(),
-                "altitude" to location.altitude,
-                "timestamp" to location.time.toDouble()
-              ))
-            }
-
-            override fun onProviderDisabled(provider: String) {
-              if (settled) return
-              settled = true
-              handler.removeCallbacks(timeoutRunnable)
-              locationManager.removeUpdates(this)
-              promise.resolve(mapOf("status" to "granted", "error" to "LOCATION_UNAVAILABLE"))
-            }
-
-            @Deprecated("Deprecated in Java")
-            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+          // 2. Permission granted — check if Location Services are enabled
+          val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+          val servicesEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            locationManager.isLocationEnabled
+          } else {
+            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+              locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
           }
 
-          // Try GPS first, fall back to network
-          val provider = when {
-            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-            else -> null
-          }
-
-          if (provider == null) {
-            settled = true
-            handler.removeCallbacks(timeoutRunnable)
-            promise.resolve(mapOf("status" to "granted", "error" to "LOCATION_UNAVAILABLE"))
-            return@askForPermissions
-          }
-
-          try {
-            handler.post {
-              locationManager.requestLocationUpdates(provider, 0L, 0f, listener)
-            }
-          } catch (e: SecurityException) {
-            settled = true
-            handler.removeCallbacks(timeoutRunnable)
-            promise.resolve(mapOf("status" to "denied", "canAskAgain" to false))
+          if (servicesEnabled) {
+            // Already enabled, fetch directly
+            fetchCoordinates(timeoutMs, promise)
+          } else {
+            // 3. Location disabled — use Google Play Services to prompt the user
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000).build()
+            val builder = LocationSettingsRequest.Builder().addLocationRequest(locationRequest)
+            val client = LocationServices.getSettingsClient(context)
+            
+            client.checkLocationSettings(builder.build())
+              .addOnSuccessListener {
+                fetchCoordinates(timeoutMs, promise)
+              }
+              .addOnFailureListener { exception ->
+                if (exception is ResolvableApiException) {
+                  try {
+                    val activity = appContext.activityProvider?.currentActivity
+                    if (activity != null) {
+                      pendingLocationPromise = promise
+                      pendingLocationTimeoutMs = timeoutMs
+                      // Use Expo's way to start intent sender if possible, or just activity.startIntentSenderForResult
+                      activity.startIntentSenderForResult(
+                        exception.resolution.intentSender,
+                        LOCATION_SETTINGS_REQUEST_CODE,
+                        null, 0, 0, 0
+                      )
+                    } else {
+                      promise.resolve(mapOf("status" to "denied", "error" to "LOCATION_SERVICES_DISABLED"))
+                    }
+                  } catch (sendEx: Exception) {
+                    promise.resolve(mapOf("status" to "denied", "error" to "LOCATION_SERVICES_DISABLED"))
+                  }
+                } else {
+                  promise.resolve(mapOf("status" to "denied", "error" to "LOCATION_SERVICES_DISABLED"))
+                }
+              }
           }
         },
         android.Manifest.permission.ACCESS_FINE_LOCATION,

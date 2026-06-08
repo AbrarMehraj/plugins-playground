@@ -282,6 +282,12 @@ export async function location(opts?: { timeout?: number }): Promise<LocationRes
     return result as LocationResult;
   }
 
+  // Location Services are globally disabled. We respect the user's decision 
+  // (e.g. if they clicked "No thanks" on Android, or if we are on iOS and they need to manually enable it).
+  if ('error' in result && result.error === 'LOCATION_SERVICES_DISABLED') {
+    return result as LocationResult;
+  }
+
   // First denial (canAskAgain: true) — respect the user's choice, return immediately
   if ('canAskAgain' in result && result.canAskAgain !== false) {
     return result as LocationResult;

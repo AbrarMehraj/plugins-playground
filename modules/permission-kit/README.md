@@ -230,7 +230,16 @@ Requests precise location permission from the user and fetches the coordinates u
 - **User taps "Allow"**: Fetches GPS signal and returns `{ status: 'granted', latitude: number, longitude: number, accuracy: number, timestamp: number, altitude: number }`.
 - **User taps "Deny"**: Returns `{ status: 'denied', canAskAgain: true }`. The user's choice is respected — no forced redirect.
 - **Subsequent call (after permanent denial)**: Automatically opens the system Location Settings for your app, waits for the user to return, and re-attempts the GPS fetch.
-- **Location Services Off**: If the global location services are disabled, it will prompt the user to enable them in the system settings first.
+- **Location Services Off**: If global location services (GPS) are disabled, it automatically prompts the user natively to turn them on (via Google Play Services on Android). If they tap "No thanks", or if you're on a device without Play Services, it aborts and returns `{ status: 'denied', error: 'LOCATION_SERVICES_DISABLED' }`. This gives you full control to show a custom explanation dialog before manually calling `PermissionKit.openLocationSettings()`.
+
+**Return Type:**
+```ts
+type LocationResult =
+  | { status: 'granted'; latitude: number; longitude: number; accuracy: number; altitude: number; timestamp: number }
+  | { status: 'denied'; canAskAgain?: boolean; error?: 'LOCATION_SERVICES_DISABLED' | 'TIMEOUT' | 'LOCATION_UNAVAILABLE' }
+  | { status: 'restricted' }
+  | { status: 'unavailable' };
+```
 
 ```ts
 const result = await PermissionKit.location({ timeout: 15000 });
@@ -238,7 +247,11 @@ const result = await PermissionKit.location({ timeout: 15000 });
 if (result.status === 'granted') {
   console.log(`Lat: ${result.latitude}, Lng: ${result.longitude}`);
 } else if (result.status === 'denied') {
-  // User denied or global location services disabled
+  if (result.error === 'LOCATION_SERVICES_DISABLED') {
+    // Show your custom dialog: "Please enable GPS to use this feature"
+  } else {
+    // User denied app permission
+  }
 } else if (result.status === 'restricted') {
   // Parental controls or MDM blocking location (iOS)
 }
