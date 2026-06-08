@@ -45,8 +45,10 @@
             "overlay",
             "exactAlarm",
             "dndAccess",
-            "notifications"
-          ]
+            "notifications",
+            "location"
+          ],
+          "locationDescription": "Used to show your current position."
         }
       ]
     ],

@@ -1,8 +1,12 @@
 package expo.modules.permissionkit
 
 import android.content.Intent
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 
@@ -242,6 +246,179 @@ class ExpoPermissionKitModule : Module() {
 
       val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
         putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      context.startActivity(intent)
+    }
+
+    // ── Location ────────────────────────────────────────────────────────────────
+
+    AsyncFunction("checkLocationStatus") { promise: expo.modules.kotlin.Promise ->
+      val context = appContext.reactContext ?: throw Exception("Context unavailable")
+      val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+      val servicesEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        locationManager.isLocationEnabled
+      } else {
+        locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+          locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+      }
+
+      val permissionsManager = appContext.permissions
+      if (permissionsManager == null) {
+        promise.resolve(mapOf(
+          "granted" to false,
+          "canAskAgain" to true,
+          "restricted" to false,
+          "servicesEnabled" to servicesEnabled
+        ))
+        return@AsyncFunction
+      }
+
+      permissionsManager.getPermissions(
+        { response ->
+          val finePerm = response[android.Manifest.permission.ACCESS_FINE_LOCATION]
+          val coarsePerm = response[android.Manifest.permission.ACCESS_COARSE_LOCATION]
+          val granted = finePerm?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED ||
+            coarsePerm?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED
+          val canAskAgain = finePerm?.canAskAgain ?: true
+          promise.resolve(mapOf(
+            "granted" to granted,
+            "canAskAgain" to canAskAgain,
+            "restricted" to false,
+            "servicesEnabled" to servicesEnabled
+          ))
+        },
+        android.Manifest.permission.ACCESS_FINE_LOCATION,
+        android.Manifest.permission.ACCESS_COARSE_LOCATION
+      )
+    }
+
+    AsyncFunction("requestLocation") { timeoutMs: Int, promise: expo.modules.kotlin.Promise ->
+      val context = appContext.reactContext ?: throw Exception("Context unavailable")
+      val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+
+      // 1. Check system-level Location Services
+      val servicesEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        locationManager.isLocationEnabled
+      } else {
+        locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+          locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+      }
+
+      if (!servicesEnabled) {
+        promise.resolve(mapOf("status" to "denied", "error" to "LOCATION_SERVICES_DISABLED"))
+        return@AsyncFunction
+      }
+
+      // 2. Request runtime permission
+      val permissionsManager = appContext.permissions
+      if (permissionsManager == null) {
+        promise.reject("E_NO_PERMISSIONS", "Permissions module is null", null)
+        return@AsyncFunction
+      }
+
+      permissionsManager.askForPermissions(
+        { response ->
+          val finePerm = response[android.Manifest.permission.ACCESS_FINE_LOCATION]
+          val coarsePerm = response[android.Manifest.permission.ACCESS_COARSE_LOCATION]
+          val granted = finePerm?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED ||
+            coarsePerm?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED
+          val canAskAgain = finePerm?.canAskAgain ?: true
+
+          if (!granted) {
+            promise.resolve(mapOf("status" to "denied", "canAskAgain" to canAskAgain))
+            return@askForPermissions
+          }
+
+          // 3. Permission granted — fetch coordinates
+          var settled = false
+          val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+          // Timeout runnable
+          val timeoutRunnable = Runnable {
+            if (!settled) {
+              settled = true
+              locationManager.removeUpdates(object : LocationListener {
+                override fun onLocationChanged(l: Location) {}
+              })
+              promise.resolve(mapOf("status" to "granted", "error" to "TIMEOUT"))
+            }
+          }
+          handler.postDelayed(timeoutRunnable, timeoutMs.toLong())
+
+          val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+              if (settled) return
+              settled = true
+              handler.removeCallbacks(timeoutRunnable)
+              locationManager.removeUpdates(this)
+              promise.resolve(mapOf(
+                "status" to "granted",
+                "latitude" to location.latitude,
+                "longitude" to location.longitude,
+                "accuracy" to location.accuracy.toDouble(),
+                "altitude" to location.altitude,
+                "timestamp" to location.time.toDouble()
+              ))
+            }
+
+            override fun onProviderDisabled(provider: String) {
+              if (settled) return
+              settled = true
+              handler.removeCallbacks(timeoutRunnable)
+              locationManager.removeUpdates(this)
+              promise.resolve(mapOf("status" to "granted", "error" to "LOCATION_UNAVAILABLE"))
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+          }
+
+          // Try GPS first, fall back to network
+          val provider = when {
+            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+            else -> null
+          }
+
+          if (provider == null) {
+            settled = true
+            handler.removeCallbacks(timeoutRunnable)
+            promise.resolve(mapOf("status" to "granted", "error" to "LOCATION_UNAVAILABLE"))
+            return@askForPermissions
+          }
+
+          try {
+            handler.post {
+              locationManager.requestLocationUpdates(provider, 0L, 0f, listener)
+            }
+          } catch (e: SecurityException) {
+            settled = true
+            handler.removeCallbacks(timeoutRunnable)
+            promise.resolve(mapOf("status" to "denied", "canAskAgain" to false))
+          }
+        },
+        android.Manifest.permission.ACCESS_FINE_LOCATION,
+        android.Manifest.permission.ACCESS_COARSE_LOCATION
+      )
+    }
+
+    AsyncFunction("openLocationSettings") {
+      // System-level Location Services toggle (for when GPS is OFF globally)
+      val context = appContext.reactContext ?: throw Exception("Context unavailable")
+      val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      context.startActivity(intent)
+    }
+
+    AsyncFunction("openAppLocationSettings") {
+      // App-specific Location permission (for when our app was permanently denied)
+      val context = appContext.reactContext ?: throw Exception("Context unavailable")
+      val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.parse("package:${context.packageName}")
+      ).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
       context.startActivity(intent)

@@ -41,16 +41,21 @@ export async function batteryOptimization() {
 
 function waitForResume(): Promise<void> {
   return new Promise(resolve => {
-    const sub = AppState.addEventListener(
-      'change',
-      (state) => {
-        if (state === 'active') {
-          sub.remove();
-          // Add a short delay to allow native settings to propagate
-          setTimeout(resolve, 500);
-        }
+    let wentToBackground = false;
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        // App left foreground (went to Settings or permission dialog dismissed)
+        wentToBackground = true;
       }
-    );
+
+      if (state === 'active' && wentToBackground) {
+        // App came back from background/settings — this is a genuine resume
+        sub.remove();
+        // Short delay to allow the OS to propagate permission changes
+        setTimeout(resolve, 400);
+      }
+    });
   });
 }
 
@@ -239,6 +244,59 @@ export async function notifications() {
   return await checkNotifications();
 }
 
+export type LocationResult =
+  | { status: 'granted'; latitude: number; longitude: number; accuracy: number; altitude: number; timestamp: number }
+  | { status: 'granted'; error: 'TIMEOUT' | 'LOCATION_UNAVAILABLE' }
+  | { status: 'denied'; canAskAgain?: boolean; error?: 'LOCATION_SERVICES_DISABLED' }
+  | { status: 'restricted' }
+  | { status: 'unavailable' };
+
+export async function checkLocation(): Promise<LocationResult> {
+  if (!NativeModule) {
+    return { status: 'unavailable' };
+  }
+  const s = await NativeModule.checkLocationStatus();
+  if (s.restricted) return { status: 'restricted' };
+  if (s.granted) return {
+    status: 'granted',
+    latitude: 0, longitude: 0, accuracy: 0, altitude: 0, timestamp: 0,
+  };
+  return { status: 'denied', canAskAgain: s.canAskAgain };
+}
+
+export async function location(opts?: { timeout?: number }): Promise<LocationResult> {
+  if (!NativeModule) {
+    return { status: 'unavailable' };
+  }
+
+  const timeoutMs = opts?.timeout ?? 10000;
+
+  // The native layer handles the full lifecycle:
+  //   - iOS: notDetermined → dialog → fetch | denied | restricted
+  //   - Android: no permission → dialog → fetch | denied
+  //   - Both: Location Services OFF → error
+  const result = await NativeModule.requestLocation(timeoutMs);
+
+  // Granted or restricted — return immediately
+  if (result.status === 'granted' || result.status === 'restricted') {
+    return result as LocationResult;
+  }
+
+  // First denial (canAskAgain: true) — respect the user's choice, return immediately
+  if ('canAskAgain' in result && result.canAskAgain !== false) {
+    return result as LocationResult;
+  }
+
+  // Permanently denied — open the app's own location settings screen
+  const openSettings =
+    NativeModule.openAppLocationSettings ?? NativeModule.openLocationSettings;
+  await openSettings.call(NativeModule);
+  await waitForResume();
+
+  // One final attempt after the user returns from Settings
+  return (await NativeModule.requestLocation(timeoutMs)) as LocationResult;
+}
+
 export const PermissionKit = {
   batteryOptimization,
   checkBatteryOptimization,
@@ -252,4 +310,6 @@ export const PermissionKit = {
   checkDndAccess,
   notifications,
   checkNotifications,
+  location,
+  checkLocation,
 };

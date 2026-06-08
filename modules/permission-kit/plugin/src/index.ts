@@ -1,7 +1,8 @@
-import { ConfigPlugin, withAndroidManifest } from 'expo/config-plugins';
+import { ConfigPlugin, withAndroidManifest, withInfoPlist } from 'expo/config-plugins';
 
 export type PermissionKitPluginProps = {
   permissions?: string[];
+  locationDescription?: string;
 };
 
 const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
@@ -9,13 +10,17 @@ const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
   props
 ) => {
   const permissions = props?.permissions || [];
+  const locationDescription =
+    props?.locationDescription ?? '$(PRODUCT_NAME) needs access to your location.';
 
+  // ─── Android Manifest permissions ───────────────────────────────────────────
   if (
     permissions.includes('batteryOptimization') ||
     permissions.includes('overlay') ||
     permissions.includes('exactAlarm') ||
     permissions.includes('dndAccess') ||
-    permissions.includes('notifications')
+    permissions.includes('notifications') ||
+    permissions.includes('location')
   ) {
     config = withAndroidManifest(config, (config) => {
       const androidManifest = config.modResults;
@@ -72,6 +77,28 @@ const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
         });
       }
 
+      if (permissions.includes('location')) {
+        if (!existingPermissions.includes('android.permission.ACCESS_FINE_LOCATION')) {
+          androidManifest.manifest['uses-permission'].push({
+            $: { 'android:name': 'android.permission.ACCESS_FINE_LOCATION' },
+          });
+        }
+        // Google Play requires ACCESS_COARSE_LOCATION alongside ACCESS_FINE_LOCATION
+        if (!existingPermissions.includes('android.permission.ACCESS_COARSE_LOCATION')) {
+          androidManifest.manifest['uses-permission'].push({
+            $: { 'android:name': 'android.permission.ACCESS_COARSE_LOCATION' },
+          });
+        }
+      }
+
+      return config;
+    });
+  }
+
+  // ─── iOS Info.plist ──────────────────────────────────────────────────────────
+  if (permissions.includes('location')) {
+    config = withInfoPlist(config, (config) => {
+      config.modResults['NSLocationWhenInUseUsageDescription'] = locationDescription;
       return config;
     });
   }

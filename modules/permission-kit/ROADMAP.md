@@ -7,6 +7,7 @@
 - [x] Accessibility Service (Android)
 - [x] Do Not Disturb Access (Android)
 - [x] Notifications (Android + iOS)
+- [x] Location (Android + iOS)
 - [x] Expo Config Plugin
 
 ## To Do

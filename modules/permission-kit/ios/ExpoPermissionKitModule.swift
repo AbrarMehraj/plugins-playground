@@ -1,20 +1,26 @@
 import ExpoModulesCore
 import UserNotifications
+import CoreLocation
+
+// CLLocationManager must live on the main thread. We keep strong
+// references here so the delegate isn't deallocated before it fires.
+private var _locationManager: CLLocationManager?
+private var _locationDelegate: LocationDelegate?
 
 public class ExpoPermissionKitModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ExpoPermissionKit")
 
     // iOS does not have Android-style battery optimization.
-    // Low Power Mode is read-only and cannot be requested programmatically.
-    // We return false to let the JS layer produce { status: 'unavailable' }.
     AsyncFunction("isBatteryOptimizationEnabled") { () -> Bool in
       return false
     }
 
     AsyncFunction("openBatteryOptimizationSettings") { () -> Void in
-      // No-op on iOS — there is no equivalent settings screen.
+      // No-op on iOS
     }
+
+    // ── Notifications ────────────────────────────────────────────────────────
 
     AsyncFunction("checkNotificationsStatus") { (promise: Promise) in
       UNUserNotificationCenter.current().getNotificationSettings { settings in
@@ -27,7 +33,7 @@ public class ExpoPermissionKitModule: Module {
     }
 
     AsyncFunction("requestNotifications") { (promise: Promise) in
-      UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+      UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
         promise.resolve([
           "granted": granted,
           "canAskAgain": false
@@ -42,5 +48,177 @@ public class ExpoPermissionKitModule: Module {
         }
       }
     }
+
+    // ── Location ─────────────────────────────────────────────────────────────
+
+    AsyncFunction("checkLocationStatus") { () -> [String: Any] in
+      let servicesEnabled = CLLocationManager.locationServicesEnabled()
+      let status = CLLocationManager().authorizationStatus
+
+      let granted: Bool
+      let canAskAgain: Bool
+      let restricted: Bool
+
+      switch status {
+      case .authorizedWhenInUse, .authorizedAlways:
+        granted = true
+        canAskAgain = false
+        restricted = false
+      case .denied:
+        granted = false
+        canAskAgain = false
+        restricted = false
+      case .restricted:
+        granted = false
+        canAskAgain = false
+        restricted = true
+      case .notDetermined:
+        granted = false
+        canAskAgain = true
+        restricted = false
+      @unknown default:
+        granted = false
+        canAskAgain = false
+        restricted = false
+      }
+
+      return [
+        "granted": granted,
+        "canAskAgain": canAskAgain,
+        "restricted": restricted,
+        "servicesEnabled": servicesEnabled
+      ]
+    }
+
+    AsyncFunction("requestLocation") { (timeoutMs: Int, promise: Promise) in
+      // 1. Check system-level Location Services first
+      guard CLLocationManager.locationServicesEnabled() else {
+        promise.resolve([
+          "status": "denied",
+          "error": "LOCATION_SERVICES_DISABLED"
+        ])
+        return
+      }
+
+      // 2. Delegate handles the full lifecycle on the main thread
+      DispatchQueue.main.async {
+        let delegate = LocationDelegate(promise: promise, timeoutMs: timeoutMs)
+        _locationDelegate = delegate
+        _locationManager = CLLocationManager()
+        _locationManager?.delegate = delegate
+        _locationManager?.desiredAccuracy = kCLLocationAccuracyBest
+
+        let status = _locationManager!.authorizationStatus
+
+        switch status {
+        case .notDetermined:
+          // Trigger the native OS dialog
+          _locationManager?.requestWhenInUseAuthorization()
+          // The delegate will get called in locationManagerDidChangeAuthorization
+        case .authorizedWhenInUse, .authorizedAlways:
+          // Already granted — just fetch coordinates
+          _locationManager?.requestLocation()
+        case .denied:
+          promise.resolve(["status": "denied", "canAskAgain": false])
+          _locationManager = nil
+          _locationDelegate = nil
+        case .restricted:
+          promise.resolve(["status": "restricted"])
+          _locationManager = nil
+          _locationDelegate = nil
+        @unknown default:
+          promise.resolve(["status": "denied", "canAskAgain": false])
+          _locationManager = nil
+          _locationDelegate = nil
+        }
+      }
+    }
+
+    AsyncFunction("openLocationSettings") { () -> Void in
+      // Opens app-specific Settings on iOS (there's no separate system Location page)
+      if let url = URL(string: UIApplication.openSettingsURLString) {
+        DispatchQueue.main.async {
+          UIApplication.shared.open(url)
+        }
+      }
+    }
+
+    AsyncFunction("openAppLocationSettings") { () -> Void in
+      // Same as openLocationSettings on iOS — both go to the app's Settings page
+      if let url = URL(string: UIApplication.openSettingsURLString) {
+        DispatchQueue.main.async {
+          UIApplication.shared.open(url)
+        }
+      }
+    }
+  }
+}
+
+// ── CLLocationManagerDelegate ─────────────────────────────────────────────────
+
+private class LocationDelegate: NSObject, CLLocationManagerDelegate {
+  private let promise: Promise
+  private var settled = false
+  private var timer: Timer?
+
+  init(promise: Promise, timeoutMs: Int) {
+    self.promise = promise
+    super.init()
+    // Start timeout timer
+    let seconds = Double(timeoutMs) / 1000.0
+    timer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
+      self?.resolve(["status": "granted", "error": "TIMEOUT"])
+    }
+  }
+
+  // Called when the user responds to the permission dialog
+  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    switch manager.authorizationStatus {
+    case .authorizedWhenInUse, .authorizedAlways:
+      // Permission just granted — now fetch
+      manager.requestLocation()
+    case .denied:
+      resolve(["status": "denied", "canAskAgain": false])
+    case .restricted:
+      resolve(["status": "restricted"])
+    case .notDetermined:
+      break // waiting
+    @unknown default:
+      resolve(["status": "denied", "canAskAgain": false])
+    }
+  }
+
+  // Location fetched successfully
+  func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    guard let loc = locations.last else { return }
+    resolve([
+      "status": "granted",
+      "latitude": loc.coordinate.latitude,
+      "longitude": loc.coordinate.longitude,
+      "accuracy": loc.horizontalAccuracy,
+      "altitude": loc.altitude,
+      "timestamp": loc.timestamp.timeIntervalSince1970 * 1000
+    ])
+  }
+
+  // Location fetch failed
+  func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    let clError = error as? CLError
+    if clError?.code == .denied {
+      resolve(["status": "denied", "canAskAgain": false])
+    } else {
+      resolve(["status": "granted", "error": "LOCATION_UNAVAILABLE"])
+    }
+  }
+
+  private func resolve(_ result: [String: Any]) {
+    guard !settled else { return }
+    settled = true
+    timer?.invalidate()
+    timer = nil
+    _locationManager?.stopUpdatingLocation()
+    _locationManager = nil
+    _locationDelegate = nil
+    promise.resolve(result)
   }
 }

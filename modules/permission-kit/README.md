@@ -36,7 +36,7 @@ In your `app.json`, add the plugin and specify the permissions you want:
       [
         "@abrarmehraj/permission-kit",
         {
-          "permissions": ["batteryOptimization", "overlay", "exactAlarm", "dndAccess", "notifications"]
+          "permissions": ["batteryOptimization", "overlay", "exactAlarm", "dndAccess", "notifications", "location"]
         }
       ]
     ]
@@ -222,6 +222,39 @@ const result = await PermissionKit.checkNotifications();
 
 ---
 
+### `PermissionKit.location({ timeout?: number })`
+
+Requests precise location permission from the user and fetches the coordinates using the correct industry-standard flow:
+
+- **First call**: Shows the native OS permission dialog (on both iOS and Android).
+- **User taps "Allow"**: Fetches GPS signal and returns `{ status: 'granted', latitude: number, longitude: number, accuracy: number, timestamp: number, altitude: number }`.
+- **User taps "Deny"**: Returns `{ status: 'denied', canAskAgain: true }`. The user's choice is respected — no forced redirect.
+- **Subsequent call (after permanent denial)**: Automatically opens the system Location Settings for your app, waits for the user to return, and re-attempts the GPS fetch.
+- **Location Services Off**: If the global location services are disabled, it will prompt the user to enable them in the system settings first.
+
+```ts
+const result = await PermissionKit.location({ timeout: 15000 });
+
+if (result.status === 'granted') {
+  console.log(`Lat: ${result.latitude}, Lng: ${result.longitude}`);
+} else if (result.status === 'denied') {
+  // User denied or global location services disabled
+} else if (result.status === 'restricted') {
+  // Parental controls or MDM blocking location (iOS)
+}
+```
+
+### `PermissionKit.checkLocation()`
+
+Check the current location permission status without showing any dialog or fetching coordinates.
+
+```ts
+const result = await PermissionKit.checkLocation();
+// { status: 'granted' | 'denied' | 'restricted', canAskAgain: boolean }
+```
+
+---
+
 ## Platform Support
 
 | Feature               | Android | iOS |
@@ -232,6 +265,7 @@ const result = await PermissionKit.checkNotifications();
 | Accessibility Service | ✅      | ⚠️ `unavailable` |
 | Do Not Disturb Access | ✅      | ⚠️ `unavailable` |
 | Notifications         | ✅      | ✅ |
+| Location              | ✅      | ✅ |
 
 > **iOS Note**: Battery Optimization, Overlay, Exact Alarm, Accessibility Service, and DND Access are Android-only concepts. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI. Notifications are natively supported on both platforms.
 
