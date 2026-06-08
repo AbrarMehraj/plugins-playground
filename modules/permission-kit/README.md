@@ -36,13 +36,17 @@ In your `app.json`, add the plugin and specify the permissions you want:
       [
         "@abrarmehraj/permission-kit",
         {
-          "permissions": ["batteryOptimization", "overlay", "exactAlarm", "dndAccess", "notifications", "location"]
+          "permissions": ["batteryOptimization", "overlay", "exactAlarm", "dndAccess", "notifications", "location"],
+          "locationDescription": "Used to show your current position."
         }
       ]
     ]
   }
 }
 ```
+
+- **`permissions`**: Array of permissions you intend to use. Only the required ones will be injected into AndroidManifest.xml.
+- **`locationDescription`**: (Optional) For iOS, this string is used as the `NSLocationWhenInUseUsageDescription` that Apple displays when asking for location permission. Defaults to `"$(PRODUCT_NAME) needs access to your location."`
 
 Then run:
 ```bash
@@ -61,6 +65,8 @@ Add the required permissions to your `android/app/src/main/AndroidManifest.xml` 
 <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 ```
 
 > **Note**: PermissionKit requires Expo Modules architecture. If you are on React Native 0.69+, you likely already have it. Make sure you run `npx pod-install` for iOS.
