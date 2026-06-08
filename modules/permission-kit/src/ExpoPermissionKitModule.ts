@@ -11,6 +11,9 @@ export interface PermissionKitNativeModule {
   openAccessibilitySettings(): Promise<void>;
   isDndAccessPermissionEnabled(): Promise<boolean>;
   openDndAccessSettings(): Promise<void>;
+  checkNotificationsStatus(): Promise<{ granted: boolean; canAskAgain: boolean }>;
+  requestNotifications(): Promise<{ granted: boolean; canAskAgain: boolean }>;
+  openNotificationSettings(): Promise<void>;
 }
 
 let _nativeModule: PermissionKitNativeModule | null = null;

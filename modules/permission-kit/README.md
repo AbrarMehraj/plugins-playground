@@ -5,7 +5,7 @@ A developer-friendly permissions library for **Expo** and **React Native**.
 One call handles the full workflow — check, request, wait for app resume, return final status.
 
 ```ts
-const result = await PermissionKit.batteryOptimization();
+const result = await PermissionKit.notifications();
 // { status: 'granted' } or { status: 'denied' }
 ```
 
@@ -36,7 +36,7 @@ In your `app.json`, add the plugin and specify the permissions you want:
       [
         "@abrarmehraj/permission-kit",
         {
-          "permissions": ["batteryOptimization", "overlay", "exactAlarm"]
+          "permissions": ["batteryOptimization", "overlay", "exactAlarm", "dndAccess", "notifications"]
         }
       ]
     ]
@@ -53,12 +53,14 @@ npx expo prebuild
 
 If you are not using Expo Prebuild, you must manage your `AndroidManifest.xml` manually. 
 
-Add the required permission to your `android/app/src/main/AndroidManifest.xml` ONLY IF you intend to use it:
+Add the required permissions to your `android/app/src/main/AndroidManifest.xml` ONLY for the features you intend to use:
 
 ```xml
 <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+<uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 ```
 
 > **Note**: PermissionKit requires Expo Modules architecture. If you are on React Native 0.69+, you likely already have it. Make sure you run `npx pod-install` for iOS.
@@ -92,9 +94,11 @@ const result = await PermissionKit.checkBatteryOptimization();
 // Use on app start to know the current state
 ```
 
+---
+
 ### `PermissionKit.overlay()`
 
-Checks if the app is allowed to draw over other apps (System Alert Window). If not, automatically opens the Android Settings "Display over other apps" dialog, waits for the user to return, and re-checks on resume.
+Checks if the app is allowed to draw over other apps (System Alert Window). If not, automatically opens the Android "Display over other apps" settings, waits for the user to return, and re-checks on resume.
 
 ```ts
 const result = await PermissionKit.overlay();
@@ -112,9 +116,11 @@ Check the current overlay status without opening settings.
 const result = await PermissionKit.checkOverlay();
 ```
 
+---
+
 ### `PermissionKit.exactAlarm()`
 
-Checks if the app is allowed to schedule exact alarms (Android 14+ requirement). If not, automatically opens the Android Settings "Alarms & Reminders" dialog, waits for the user to return, and re-checks on resume.
+Checks if the app is allowed to schedule exact alarms (Android 14+ requirement). If not, automatically opens the Android "Alarms & Reminders" settings, waits for the user to return, and re-checks on resume.
 
 ```ts
 const result = await PermissionKit.exactAlarm();
@@ -132,9 +138,11 @@ Check the current exact alarm status without opening settings.
 const result = await PermissionKit.checkExactAlarm();
 ```
 
+---
+
 ### `PermissionKit.accessibility({ androidServicePath })`
 
-Checks if a specific Accessibility Service is enabled. If not, automatically opens the Android Accessibility Settings dialog, waits for the user to return, and re-checks on resume.
+Checks if a specific Accessibility Service is enabled. If not, automatically opens the Android Accessibility Settings, waits for the user to return, and re-checks on resume.
 
 > **Note**: Your app must actually define an Accessibility Service in its `AndroidManifest.xml` to appear in the settings list!
 
@@ -158,9 +166,11 @@ const result = await PermissionKit.checkAccessibility({
 });
 ```
 
+---
+
 ### `PermissionKit.dndAccess()`
 
-Checks if the app is allowed to modify Do Not Disturb (Notification Policy Access). If not, automatically opens the Android Settings "Do Not Disturb access" dialog, waits for the user to return, and re-checks on resume.
+Checks if the app is allowed to modify Do Not Disturb (Notification Policy Access). If not, automatically opens the Android "Do Not Disturb access" settings, waits for the user to return, and re-checks on resume.
 
 ```ts
 const result = await PermissionKit.dndAccess();
@@ -180,17 +190,50 @@ const result = await PermissionKit.checkDndAccess();
 
 ---
 
+### `PermissionKit.notifications()`
+
+Requests notification permission from the user using the correct industry-standard flow:
+
+- **First call**: Shows the native OS permission dialog (on both iOS and Android 13+).
+- **User taps "Allow"**: Returns `{ status: 'granted' }`.
+- **User taps "Don't Allow"**: Returns `{ status: 'denied', canAskAgain: true }`. The user's choice is respected — no forced redirect.
+- **Subsequent call (after permanent denial)**: Automatically opens the system Notification Settings for your app, waits for the user to return, and re-checks.
+
+```ts
+const result = await PermissionKit.notifications();
+
+if (result.status === 'granted') {
+  // Notifications are enabled — schedule your push token registration here
+} else if (result.status === 'denied') {
+  // User denied — show an in-app explanation if you want
+} else if (result.status === 'unavailable') {
+  // Should not happen on iOS or Android 13+
+}
+```
+
+### `PermissionKit.checkNotifications()`
+
+Check the current notification permission status without showing any dialog.
+
+```ts
+const result = await PermissionKit.checkNotifications();
+// { status: 'granted' | 'denied', canAskAgain: boolean }
+```
+
+---
+
 ## Platform Support
 
-| Feature               | Android | iOS              |
-|-----------------------|---------|------------------|
-| Battery Optimization  | ✅      | `unavailable` ⚠️ |
-| Overlay Permission    | ✅      | `unavailable` ⚠️ |
-| Exact Alarm           | ✅      | `unavailable` ⚠️ |
-| Accessibility Service | ✅      | `unavailable` ⚠️ |
-| Do Not Disturb Access | ✅      | `unavailable` ⚠️ |
+| Feature               | Android | iOS |
+|-----------------------|---------|-----|
+| Battery Optimization  | ✅      | ⚠️ `unavailable` |
+| Overlay Permission    | ✅      | ⚠️ `unavailable` |
+| Exact Alarm           | ✅      | ⚠️ `unavailable` |
+| Accessibility Service | ✅      | ⚠️ `unavailable` |
+| Do Not Disturb Access | ✅      | ⚠️ `unavailable` |
+| Notifications         | ✅      | ✅ |
 
-> **iOS Note**: iOS does not have Android-style equivalents for these system-level permissions. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI.
+> **iOS Note**: Battery Optimization, Overlay, Exact Alarm, Accessibility Service, and DND Access are Android-only concepts. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI. Notifications are natively supported on both platforms.
 
 ---
 
@@ -201,11 +244,11 @@ const result = await PermissionKit.checkDndAccess();
 - [x] Exact Alarm (Android)
 - [x] Accessibility Service (Android)
 - [x] Do Not Disturb Access (Android)
-- [ ] Notifications (Android + iOS)
-- [ ] Open Settings Helper
-- [ ] ensure()
+- [x] Notifications (Android + iOS)
 - [x] Expo Config Plugin
-- [ ] Standalone Package
+- [ ] Usage Access (Android)
+- [ ] Write System Settings (Android)
+- [ ] `ensure()` helper
 
 ---
 

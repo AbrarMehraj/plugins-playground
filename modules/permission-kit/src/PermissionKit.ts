@@ -199,6 +199,46 @@ export async function dndAccess() {
   return await checkDndAccess();
 }
 
+export async function checkNotifications() {
+  if (!NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+  const result = await NativeModule.checkNotificationsStatus();
+  return {
+    status: (result.granted ? 'granted' : 'denied') as 'granted' | 'denied',
+    canAskAgain: result.canAskAgain,
+  };
+}
+
+export async function notifications() {
+  if (!NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+
+  const check = await checkNotifications();
+
+  // Already granted — nothing to do
+  if (check.status === 'granted') {
+    return { status: 'granted' as const };
+  }
+
+  if (check.canAskAgain) {
+    // OS dialog CAN be shown — request it and let the user decide
+    const requested = await NativeModule.requestNotifications();
+    return {
+      status: (requested.granted ? 'granted' : 'denied') as 'granted' | 'denied',
+      canAskAgain: requested.canAskAgain,
+    };
+  }
+
+  // OS dialog is permanently blocked — only option is to open Settings
+  // (This is exactly what WhatsApp, Spotify, etc. do)
+  await NativeModule.openNotificationSettings();
+  await waitForResume();
+
+  return await checkNotifications();
+}
+
 export const PermissionKit = {
   batteryOptimization,
   checkBatteryOptimization,
@@ -210,4 +250,6 @@ export const PermissionKit = {
   checkAccessibility,
   dndAccess,
   checkDndAccess,
+  notifications,
+  checkNotifications,
 };

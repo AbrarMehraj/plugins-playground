@@ -183,5 +183,68 @@ class ExpoPermissionKitModule : Module() {
         context.startActivity(intent)
       }
     }
+
+    AsyncFunction("checkNotificationsStatus") { promise: expo.modules.kotlin.Promise ->
+      val context = appContext.reactContext ?: throw Exception("Context unavailable")
+      val notificationManager = androidx.core.app.NotificationManagerCompat.from(context)
+      val granted = notificationManager.areNotificationsEnabled()
+
+      if (Build.VERSION.SDK_INT >= 33) {
+        val permissionsManager = appContext.permissions
+        if (permissionsManager != null) {
+          permissionsManager.getPermissions(
+            { response ->
+              val perm = response[android.Manifest.permission.POST_NOTIFICATIONS]
+              promise.resolve(mapOf(
+                "granted" to granted,
+                "canAskAgain" to (perm?.canAskAgain ?: true)
+              ))
+            },
+            android.Manifest.permission.POST_NOTIFICATIONS
+          )
+          return@AsyncFunction
+        }
+      }
+      promise.resolve(mapOf("granted" to granted, "canAskAgain" to !granted))
+    }
+
+    AsyncFunction("requestNotifications") { promise: expo.modules.kotlin.Promise ->
+      val context = appContext.reactContext ?: throw Exception("Context unavailable")
+
+      if (Build.VERSION.SDK_INT >= 33) { // Build.VERSION_CODES.TIRAMISU
+        val permissionsManager = appContext.permissions
+        if (permissionsManager == null) {
+          promise.reject("E_NO_PERMISSIONS", "Permissions module is null", null)
+          return@AsyncFunction
+        }
+
+        permissionsManager.askForPermissions(
+          { response ->
+            val perm = response[android.Manifest.permission.POST_NOTIFICATIONS]
+            val granted = perm?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED
+            promise.resolve(mapOf(
+              "granted" to granted,
+              "canAskAgain" to (perm?.canAskAgain ?: true)
+            ))
+          },
+          android.Manifest.permission.POST_NOTIFICATIONS
+        )
+      } else {
+        val notificationManager = androidx.core.app.NotificationManagerCompat.from(context)
+        val granted = notificationManager.areNotificationsEnabled()
+        promise.resolve(mapOf("granted" to granted, "canAskAgain" to !granted))
+      }
+    }
+
+    AsyncFunction("openNotificationSettings") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      context.startActivity(intent)
+    }
   }
 }

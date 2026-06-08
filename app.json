@@ -44,7 +44,8 @@
             "batteryOptimization",
             "overlay",
             "exactAlarm",
-            "dndAccess"
+            "dndAccess",
+            "notifications"
           ]
         }
       ]

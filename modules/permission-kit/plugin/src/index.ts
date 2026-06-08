@@ -14,7 +14,8 @@ const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
     permissions.includes('batteryOptimization') ||
     permissions.includes('overlay') ||
     permissions.includes('exactAlarm') ||
-    permissions.includes('dndAccess')
+    permissions.includes('dndAccess') ||
+    permissions.includes('notifications')
   ) {
     config = withAndroidManifest(config, (config) => {
       const androidManifest = config.modResults;
@@ -59,6 +60,15 @@ const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
       ) {
         androidManifest.manifest['uses-permission'].push({
           $: { 'android:name': 'android.permission.ACCESS_NOTIFICATION_POLICY' },
+        });
+      }
+
+      if (
+        permissions.includes('notifications') &&
+        !existingPermissions.includes('android.permission.POST_NOTIFICATIONS')
+      ) {
+        androidManifest.manifest['uses-permission'].push({
+          $: { 'android:name': 'android.permission.POST_NOTIFICATIONS' },
         });
       }
 

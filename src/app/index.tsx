@@ -2,8 +2,6 @@ import { Button, Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PermissionKit } from '../../modules/permission-kit/src';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -38,19 +36,15 @@ export default function HomeScreen() {
     console.log("DND Access Result:", result);
   };
 
+  const testNotifications = async () => {
+    const result = await PermissionKit.notifications();
+    console.log("Notifications Result:", result);
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+     
 
 
         <Button title="Battery Optimization" onPress={test} />
@@ -58,6 +52,7 @@ export default function HomeScreen() {
         <Button title="Exact Alarm" onPress={testExactAlarm} />
         <Button title="Accessibility Service" onPress={testAccessibility} />
         <Button title="DND Access" onPress={testDndAccess} />
+        <Button title="Notifications" onPress={testNotifications} />
 
         {Platform.OS === 'web' && <WebBadge />}
       </SafeAreaView>
