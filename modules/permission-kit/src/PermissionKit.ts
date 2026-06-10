@@ -1,5 +1,6 @@
 import { AppState, Platform } from 'react-native';
 import NativeModule from './ExpoPermissionKitModule';
+import { MediaOptions, MediaResult } from './types';
 
 export async function checkBatteryOptimization() {
   if (Platform.OS === 'ios' || !NativeModule) {
@@ -236,12 +237,8 @@ export async function notifications() {
     };
   }
 
-  // OS dialog is permanently blocked — only option is to open Settings
-  // (This is exactly what WhatsApp, Spotify, etc. do)
-  await NativeModule.openNotificationSettings();
-  await waitForResume();
-
-  return await checkNotifications();
+  // Permanently denied - return so developer can show a custom UI
+  return { status: 'denied' as const, canAskAgain: false };
 }
 
 export type LocationResult =
@@ -277,30 +274,59 @@ export async function location(opts?: { timeout?: number }): Promise<LocationRes
   //   - Both: Location Services OFF → error
   const result = await NativeModule.requestLocation(timeoutMs);
 
-  // Granted or restricted — return immediately
-  if (result.status === 'granted' || result.status === 'restricted') {
-    return result as LocationResult;
+  return result as LocationResult;
+}
+
+export async function checkMedia(opts: MediaOptions): Promise<MediaResult> {
+  if (!NativeModule) return { status: 'unavailable' };
+  
+  try {
+    return await NativeModule.checkMediaStatus(opts.type);
+  } catch (error) {
+    return { status: 'unavailable' };
+  }
+}
+
+export async function media(opts: MediaOptions): Promise<MediaResult> {
+  if (!NativeModule) return { status: 'unavailable' };
+
+  // First, check if already granted
+  const check = await checkMedia(opts);
+  if (!opts.requestMore && (check.status === 'granted' || check.status === 'limited' || check.status === 'restricted')) {
+    return check;
+  }
+  
+  if (opts.requestMore && check.status === 'limited' && Platform.OS === 'ios') {
+    await NativeModule.presentLimitedLibraryPicker();
+    // Re-check status after they potentially interacted with the picker.
+    // (Note: on iOS the picker is an out-of-process system UI, but it doesn't background the app, 
+    // so we return immediately. The developer can check status again later if needed)
+    return await checkMedia(opts);
   }
 
-  // Location Services are globally disabled. We respect the user's decision 
-  // (e.g. if they clicked "No thanks" on Android, or if we are on iOS and they need to manually enable it).
-  if ('error' in result && result.error === 'LOCATION_SERVICES_DISABLED') {
-    return result as LocationResult;
+  // If it's the "all" files permission, we must go straight to settings on Android
+  if (opts.type === 'all' && Platform.OS === 'android') {
+    await NativeModule.openAllFilesSettings();
+    await waitForResume();
+    return await checkMedia(opts);
   }
 
-  // First denial (canAskAgain: true) — respect the user's choice, return immediately
-  if ('canAskAgain' in result && result.canAskAgain !== false) {
-    return result as LocationResult;
+  // Request runtime permission
+  let result;
+  try {
+    result = await NativeModule.requestMedia(opts.type);
+  } catch (error: any) {
+    if (error?.message?.includes('MISSING_PERMISSION')) {
+      console.warn(
+        `[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'media' to your app.json plugin.`
+      );
+      return { status: 'denied' };
+    }
+    throw error;
   }
 
-  // Permanently denied — open the app's own location settings screen
-  const openSettings =
-    NativeModule.openAppLocationSettings ?? NativeModule.openLocationSettings;
-  await openSettings.call(NativeModule);
-  await waitForResume();
-
-  // One final attempt after the user returns from Settings
-  return (await NativeModule.requestLocation(timeoutMs)) as LocationResult;
+  // Denied (whether canAskAgain is true or false) or granted
+  return result;
 }
 
 export const PermissionKit = {
@@ -318,4 +344,6 @@ export const PermissionKit = {
   checkNotifications,
   location,
   checkLocation,
+  media,
+  checkMedia,
 };

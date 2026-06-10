@@ -29,6 +29,17 @@ export interface PermissionKitNativeModule {
   >;
   openLocationSettings(): Promise<void>;
   openAppLocationSettings(): Promise<void>;
+  checkMediaStatus(type: string): Promise<{
+    status: 'granted' | 'limited' | 'denied' | 'restricted' | 'unavailable';
+    canAskAgain?: boolean;
+  }>;
+  requestMedia(type: string): Promise<{
+    status: 'granted' | 'limited' | 'denied' | 'restricted' | 'unavailable';
+    canAskAgain?: boolean;
+  }>;
+  openMediaSettings(): Promise<void>;
+  openAllFilesSettings(): Promise<void>;
+  presentLimitedLibraryPicker(): Promise<void>;
 }
 
 let _nativeModule: PermissionKitNativeModule | null = null;

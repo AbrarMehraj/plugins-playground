@@ -46,7 +46,8 @@
             "exactAlarm",
             "dndAccess",
             "notifications",
-            "location"
+            "location",
+            "media"
           ],
           "locationDescription": "Used to show your current position."
         }

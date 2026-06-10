@@ -2,16 +2,19 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const config_plugins_1 = require("expo/config-plugins");
 const withPermissionKit = (config, props) => {
-    var _a;
+    var _a, _b, _c;
     const permissions = (props === null || props === void 0 ? void 0 : props.permissions) || [];
     const locationDescription = (_a = props === null || props === void 0 ? void 0 : props.locationDescription) !== null && _a !== void 0 ? _a : '$(PRODUCT_NAME) needs access to your location.';
+    const photoDescription = (_b = props === null || props === void 0 ? void 0 : props.photoDescription) !== null && _b !== void 0 ? _b : '$(PRODUCT_NAME) needs access to your photos.';
+    const appleMusicDescription = (_c = props === null || props === void 0 ? void 0 : props.appleMusicDescription) !== null && _c !== void 0 ? _c : '$(PRODUCT_NAME) needs access to your music.';
     // ─── Android Manifest permissions ───────────────────────────────────────────
     if (permissions.includes('batteryOptimization') ||
         permissions.includes('overlay') ||
         permissions.includes('exactAlarm') ||
         permissions.includes('dndAccess') ||
         permissions.includes('notifications') ||
-        permissions.includes('location')) {
+        permissions.includes('location') ||
+        permissions.includes('media')) {
         config = (0, config_plugins_1.withAndroidManifest)(config, (config) => {
             const androidManifest = config.modResults;
             if (!androidManifest.manifest['uses-permission']) {
@@ -61,13 +64,37 @@ const withPermissionKit = (config, props) => {
                     });
                 }
             }
+            if (permissions.includes('media')) {
+                const mediaPerms = [
+                    'android.permission.READ_EXTERNAL_STORAGE',
+                    'android.permission.WRITE_EXTERNAL_STORAGE',
+                    'android.permission.READ_MEDIA_IMAGES',
+                    'android.permission.READ_MEDIA_VIDEO',
+                    'android.permission.READ_MEDIA_AUDIO',
+                    'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+                    'android.permission.MANAGE_EXTERNAL_STORAGE'
+                ];
+                for (const p of mediaPerms) {
+                    if (!existingPermissions.includes(p)) {
+                        androidManifest.manifest['uses-permission'].push({
+                            $: { 'android:name': p },
+                        });
+                    }
+                }
+            }
             return config;
         });
     }
     // ─── iOS Info.plist ──────────────────────────────────────────────────────────
-    if (permissions.includes('location')) {
+    if (permissions.includes('location') || permissions.includes('media')) {
         config = (0, config_plugins_1.withInfoPlist)(config, (config) => {
-            config.modResults['NSLocationWhenInUseUsageDescription'] = locationDescription;
+            if (permissions.includes('location')) {
+                config.modResults['NSLocationWhenInUseUsageDescription'] = locationDescription;
+            }
+            if (permissions.includes('media')) {
+                config.modResults['NSPhotoLibraryUsageDescription'] = photoDescription;
+                config.modResults['NSAppleMusicUsageDescription'] = appleMusicDescription;
+            }
             return config;
         });
     }

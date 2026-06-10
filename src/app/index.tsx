@@ -46,6 +46,11 @@ export default function HomeScreen() {
     console.log("Notifications Result:", result);
   };
 
+  const testMedia = async () => {
+    const result = await PermissionKit.media({ type: 'photo', requestMore: true });
+    console.log("Media Result:", result);
+  };
+
   const testLocation = async () => {
     setLocationState({ loading: true, result: null });
     try {
@@ -63,13 +68,16 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safeArea}>
      
 
-
         <Button title="Battery Optimization" onPress={test} />
         <Button title="Overlay Permission" onPress={testOverlay} />
         <Button title="Exact Alarm" onPress={testExactAlarm} />
         <Button title="Accessibility Service" onPress={testAccessibility} />
         <Button title="DND Access" onPress={testDndAccess} />
         <Button title="Notifications" onPress={testNotifications} />
+        <Button title="Media (Photos)" onPress={async () => console.log("Media Result:", await PermissionKit.media({ type: 'photo', requestMore: true }))} />
+        <Button title="Media (Video)" onPress={async () => console.log("Media Result:", await PermissionKit.media({ type: 'video' ,requestMore:true}))} />
+        <Button title="Media (Audio)" onPress={async () => console.log("Media Result:", await PermissionKit.media({ type: 'audio' }))} />
+        <Button title="Media (All Files)" onPress={async () => console.log("Media Result:", await PermissionKit.media({ type: 'all' }))} />
         <Button
           title={locationState.loading ? "📍 Fetching location…" : "Location"}
           onPress={testLocation}

@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.os.Environment
 import android.provider.Settings
 
 import com.google.android.gms.common.api.ResolvableApiException
@@ -482,6 +483,171 @@ class ExpoPermissionKitModule : Module() {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
       context.startActivity(intent)
+    }
+
+    // ── Media ───────────────────────────────────────────────────────────────────
+
+    AsyncFunction("checkMediaStatus") { type: String, promise: expo.modules.kotlin.Promise ->
+      val permissionsManager = appContext.permissions
+      val context = appContext.reactContext
+      if (context == null || permissionsManager == null) {
+        promise.resolve(mapOf("status" to "unavailable"))
+        return@AsyncFunction
+      }
+
+      if (type == "all") {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          promise.resolve(mapOf(
+            "status" to if (Environment.isExternalStorageManager()) "granted" else "denied",
+            "canAskAgain" to true
+          ))
+        } else {
+          permissionsManager.getPermissions(
+            { response ->
+              val readStatus = response[android.Manifest.permission.READ_EXTERNAL_STORAGE]
+              promise.resolve(mapOf(
+                "status" to if (readStatus?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED) "granted" else "denied",
+                "canAskAgain" to (readStatus?.canAskAgain ?: true)
+              ))
+            },
+            android.Manifest.permission.READ_EXTERNAL_STORAGE
+          )
+        }
+        return@AsyncFunction
+      }
+
+      val permissionsToRequest = getMediaPermissionsForType(type)
+      if (permissionsToRequest.isEmpty()) {
+        promise.resolve(mapOf("status" to "unavailable"))
+        return@AsyncFunction
+      }
+
+      permissionsManager.getPermissions(
+        { response ->
+          val result = evaluateMediaPermissionsResponse(type, response)
+          promise.resolve(result)
+        },
+        *permissionsToRequest.toTypedArray()
+      )
+    }
+
+    AsyncFunction("requestMedia") { type: String, promise: expo.modules.kotlin.Promise ->
+      val permissionsManager = appContext.permissions
+      val context = appContext.reactContext
+      if (context == null || permissionsManager == null) {
+        promise.resolve(mapOf("status" to "unavailable"))
+        return@AsyncFunction
+      }
+
+      if (type == "all") {
+        promise.resolve(mapOf("status" to "denied", "canAskAgain" to true))
+        return@AsyncFunction
+      }
+
+      val permissionsToRequest = getMediaPermissionsForType(type)
+      if (permissionsToRequest.isEmpty()) {
+        promise.resolve(mapOf("status" to "unavailable"))
+        return@AsyncFunction
+      }
+
+      permissionsManager.askForPermissions(
+        { response ->
+          val result = evaluateMediaPermissionsResponse(type, response)
+          promise.resolve(result)
+        },
+        *permissionsToRequest.toTypedArray()
+      )
+    }
+
+    AsyncFunction("openMediaSettings") {
+      val context = appContext.reactContext ?: throw Exception("Context unavailable")
+      val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.parse("package:${context.packageName}")
+      ).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      context.startActivity(intent)
+    }
+
+    AsyncFunction("openAllFilesSettings") {
+      val context = appContext.reactContext ?: throw Exception("Context unavailable")
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+          data = Uri.parse("package:${context.packageName}")
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+      } else {
+        val intent = Intent(
+          Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+          Uri.parse("package:${context.packageName}")
+        ).apply {
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+      }
+    }
+  }
+
+  private fun getMediaPermissionsForType(type: String): List<String> {
+    val perms = mutableListOf<String>()
+    when (type) {
+      "photo", "video" -> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34
+          perms.add("android.permission.READ_MEDIA_VISUAL_USER_SELECTED")
+          perms.add(if (type == "photo") "android.permission.READ_MEDIA_IMAGES" else "android.permission.READ_MEDIA_VIDEO")
+        } else if (Build.VERSION.SDK_INT == Build.VERSION_CODES.TIRAMISU) { // API 33
+          perms.add(if (type == "photo") "android.permission.READ_MEDIA_IMAGES" else "android.permission.READ_MEDIA_VIDEO")
+        } else {
+          perms.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+      }
+      "audio" -> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          perms.add("android.permission.READ_MEDIA_AUDIO")
+        } else {
+          perms.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+      }
+    }
+    return perms
+  }
+
+  private fun evaluateMediaPermissionsResponse(
+    type: String, 
+    response: Map<String, expo.modules.interfaces.permissions.PermissionsResponse>
+  ): Map<String, Any> {
+    var allGranted = true
+    var isLimited = false
+    var canAskAgain = true
+
+    for ((perm, permResponse) in response) {
+      android.util.Log.d("PermissionKit", "Perm: $perm, status: ${permResponse.status}, canAskAgain: ${permResponse.canAskAgain}")
+      val granted = permResponse.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED
+      if (!granted) {
+        if (!permResponse.canAskAgain) {
+          canAskAgain = false
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            (perm == "android.permission.READ_MEDIA_IMAGES" || perm == "android.permission.READ_MEDIA_VIDEO")) {
+          val userSelected = response["android.permission.READ_MEDIA_VISUAL_USER_SELECTED"]
+          if (userSelected?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED) {
+            isLimited = true
+            allGranted = false
+            continue
+          }
+        }
+        allGranted = false
+      }
+    }
+
+    return if (allGranted) {
+      mapOf("status" to "granted")
+    } else if (isLimited) {
+      mapOf("status" to "limited")
+    } else {
+      mapOf("status" to "denied", "canAskAgain" to canAskAgain)
     }
   }
 }

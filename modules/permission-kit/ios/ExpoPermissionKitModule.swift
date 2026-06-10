@@ -1,6 +1,9 @@
 import ExpoModulesCore
 import UserNotifications
 import CoreLocation
+import Photos
+import PhotosUI
+import MediaPlayer
 
 // CLLocationManager must live on the main thread. We keep strong
 // references here so the delegate isn't deallocated before it fires.
@@ -148,6 +151,150 @@ public class ExpoPermissionKitModule: Module {
       if let url = URL(string: UIApplication.openSettingsURLString) {
         DispatchQueue.main.async {
           UIApplication.shared.open(url)
+        }
+      }
+    }
+
+    // ── Media ───────────────────────────────────────────────────────────────────
+
+    AsyncFunction("checkMediaStatus") { (type: String, promise: Promise) in
+      if type == "all" {
+        promise.resolve(["status": "unavailable"])
+        return
+      }
+
+      if type == "audio" {
+        let status = MPMediaLibrary.authorizationStatus()
+        switch status {
+        case .authorized:
+          promise.resolve(["status": "granted", "canAskAgain": false])
+        case .denied:
+          promise.resolve(["status": "denied", "canAskAgain": false])
+        case .restricted:
+          promise.resolve(["status": "restricted", "canAskAgain": false])
+        case .notDetermined:
+          promise.resolve(["status": "denied", "canAskAgain": true])
+        @unknown default:
+          promise.resolve(["status": "denied", "canAskAgain": false])
+        }
+        return
+      }
+
+      // photo or video
+      if #available(iOS 14, *) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .authorized:
+          promise.resolve(["status": "granted", "canAskAgain": false])
+        case .limited:
+          promise.resolve(["status": "limited", "canAskAgain": false])
+        case .denied:
+          promise.resolve(["status": "denied", "canAskAgain": false])
+        case .restricted:
+          promise.resolve(["status": "restricted", "canAskAgain": false])
+        case .notDetermined:
+          promise.resolve(["status": "denied", "canAskAgain": true])
+        @unknown default:
+          promise.resolve(["status": "denied", "canAskAgain": false])
+        }
+      } else {
+        let status = PHPhotoLibrary.authorizationStatus()
+        switch status {
+        case .authorized:
+          promise.resolve(["status": "granted", "canAskAgain": false])
+        case .denied:
+          promise.resolve(["status": "denied", "canAskAgain": false])
+        case .restricted:
+          promise.resolve(["status": "restricted", "canAskAgain": false])
+        case .notDetermined:
+          promise.resolve(["status": "denied", "canAskAgain": true])
+        @unknown default:
+          promise.resolve(["status": "denied", "canAskAgain": false])
+        }
+      }
+    }
+
+    AsyncFunction("requestMedia") { (type: String, promise: Promise) in
+      if type == "all" {
+        promise.resolve(["status": "unavailable"])
+        return
+      }
+
+      if type == "audio" {
+        MPMediaLibrary.requestAuthorization { status in
+          switch status {
+          case .authorized:
+            promise.resolve(["status": "granted", "canAskAgain": false])
+          case .denied:
+            promise.resolve(["status": "denied", "canAskAgain": false])
+          case .restricted:
+            promise.resolve(["status": "restricted", "canAskAgain": false])
+          case .notDetermined:
+            promise.resolve(["status": "denied", "canAskAgain": true])
+          @unknown default:
+            promise.resolve(["status": "denied", "canAskAgain": false])
+          }
+        }
+        return
+      }
+
+      // photo or video
+      if #available(iOS 14, *) {
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+          switch status {
+          case .authorized:
+            promise.resolve(["status": "granted", "canAskAgain": false])
+          case .limited:
+            promise.resolve(["status": "limited", "canAskAgain": false])
+          case .denied:
+            promise.resolve(["status": "denied", "canAskAgain": false])
+          case .restricted:
+            promise.resolve(["status": "restricted", "canAskAgain": false])
+          case .notDetermined:
+            promise.resolve(["status": "denied", "canAskAgain": true])
+          @unknown default:
+            promise.resolve(["status": "denied", "canAskAgain": false])
+          }
+        }
+      } else {
+        PHPhotoLibrary.requestAuthorization { status in
+          switch status {
+          case .authorized:
+            promise.resolve(["status": "granted", "canAskAgain": false])
+          case .denied:
+            promise.resolve(["status": "denied", "canAskAgain": false])
+          case .restricted:
+            promise.resolve(["status": "restricted", "canAskAgain": false])
+          case .notDetermined:
+            promise.resolve(["status": "denied", "canAskAgain": true])
+          @unknown default:
+            promise.resolve(["status": "denied", "canAskAgain": false])
+          }
+        }
+      }
+    }
+
+    AsyncFunction("openMediaSettings") { () -> Void in
+      if let url = URL(string: UIApplication.openSettingsURLString) {
+        DispatchQueue.main.async {
+          UIApplication.shared.open(url)
+        }
+      }
+    }
+
+    AsyncFunction("openAllFilesSettings") { () -> Void in
+      // No-op on iOS
+    }
+
+    AsyncFunction("presentLimitedLibraryPicker") { () -> Void in
+      if #available(iOS 14, *) {
+        DispatchQueue.main.async {
+          guard let rootVC = UIApplication.shared.windows.first?.rootViewController else { return }
+          var topVC = rootVC
+          while let presented = topVC.presentedViewController {
+              topVC = presented
+          }
+          PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: topVC)
         }
       }
     }

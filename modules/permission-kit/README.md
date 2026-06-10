@@ -36,8 +36,10 @@ In your `app.json`, add the plugin and specify the permissions you want:
       [
         "@abrarmehraj/permission-kit",
         {
-          "permissions": ["batteryOptimization", "overlay", "exactAlarm", "dndAccess", "notifications", "location"],
-          "locationDescription": "Used to show your current position."
+          "permissions": ["batteryOptimization", "overlay", "exactAlarm", "dndAccess", "notifications", "location", "media"],
+          "locationDescription": "Used to show your current position.",
+          "photoDescription": "Used to pick a profile picture.",
+          "appleMusicDescription": "Used to pick audio."
         }
       ]
     ]
@@ -46,7 +48,9 @@ In your `app.json`, add the plugin and specify the permissions you want:
 ```
 
 - **`permissions`**: Array of permissions you intend to use. Only the required ones will be injected into AndroidManifest.xml.
-- **`locationDescription`**: (Optional) For iOS, this string is used as the `NSLocationWhenInUseUsageDescription` that Apple displays when asking for location permission. Defaults to `"$(PRODUCT_NAME) needs access to your location."`
+- **`locationDescription`**: (Optional) For iOS, this string is used as the `NSLocationWhenInUseUsageDescription`. Defaults to `"$(PRODUCT_NAME) needs access to your location."`
+- **`photoDescription`**: (Optional) For iOS, this string is used as the `NSPhotoLibraryUsageDescription`. Defaults to `"$(PRODUCT_NAME) needs access to your photos."`
+- **`appleMusicDescription`**: (Optional) For iOS, this string is used as the `NSAppleMusicUsageDescription`. Defaults to `"$(PRODUCT_NAME) needs access to your music."`
 
 Then run:
 ```bash
@@ -67,11 +71,55 @@ Add the required permissions to your `android/app/src/main/AndroidManifest.xml` 
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+<!-- Media Permissions for all API Levels -->
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+<uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 ```
 
 > **Note**: PermissionKit requires Expo Modules architecture. If you are on React Native 0.69+, you likely already have it. Make sure you run `npx pod-install` for iOS.
 
 ## API
+
+### `PermissionKit.media({ type, requestMore? })`
+
+Automatically resolves Android fragmentation (Android 14+, Android 13, Android < 13) and iOS restricted modes into a simple API.
+
+```ts
+import { PermissionKit } from '@abrarmehraj/permission-kit';
+
+// type: 'photo' | 'video' | 'audio' | 'all'
+// requestMore (optional): Set to true to pop up the native OS picker when status is 'limited' so users can add more photos.
+const result = await PermissionKit.media({ type: 'photo', requestMore: true });
+
+if (result.status === 'granted') {
+  // You have full access. Safe to open your image picker.
+} else if (result.status === 'limited') {
+  // User only granted access to a few specific photos (Android 14+ / iOS 14+).
+  // Because we passed requestMore: true, the OS prompt will appear first so they can select more photos.
+} else if (result.status === 'denied') {
+  // Permission denied. Use this to show a custom UI before calling PermissionKit.openMediaSettings()
+} else if (result.status === 'unavailable') {
+  // E.g., iOS doesn't have an "all" files permission (use Document Picker instead).
+}
+```
+
+> **Note**: Requesting `type: 'all'` on Android will trigger the `MANAGE_EXTERNAL_STORAGE` settings redirect natively. On iOS, it returns `unavailable`.
+
+### `PermissionKit.checkMedia({ type })`
+
+Check the current media permission status.
+
+```ts
+const result = await PermissionKit.checkMedia({ type: 'photo' });
+```
+
+---
 
 ### `PermissionKit.batteryOptimization()`
 
@@ -302,6 +350,16 @@ const result = await PermissionKit.checkLocation();
 - [ ] Usage Access (Android)
 - [ ] Write System Settings (Android)
 - [ ] `ensure()` helper
+
+---
+
+## Issues & Feedback
+
+If you encounter any bugs, have feature requests, or want to contribute to the library, please feel free to open an issue or pull request on our GitHub repository:
+
+[https://github.com/AbrarMehraj/plugins-playground/issues](https://github.com/AbrarMehraj/plugins-playground/issues)
+
+We highly value developer feedback to make this the best permissions library in the React Native ecosystem!
 
 ---
 
