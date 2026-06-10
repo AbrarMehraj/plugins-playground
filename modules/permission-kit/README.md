@@ -333,8 +333,9 @@ const result = await PermissionKit.checkLocation();
 | Do Not Disturb Access | ✅      | ⚠️ `unavailable` |
 | Notifications         | ✅      | ✅ |
 | Location              | ✅      | ✅ |
+| Media                 | ✅      | ✅ |
 
-> **iOS Note**: Battery Optimization, Overlay, Exact Alarm, Accessibility Service, and DND Access are Android-only concepts. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI. Notifications are natively supported on both platforms.
+> **iOS Note**: Battery Optimization, Overlay, Exact Alarm, Accessibility Service, and DND Access are Android-only concepts. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI. Notifications, Location, and Media are natively supported on both platforms.
 
 ---
 
@@ -346,6 +347,8 @@ const result = await PermissionKit.checkLocation();
 - [x] Accessibility Service (Android)
 - [x] Do Not Disturb Access (Android)
 - [x] Notifications (Android + iOS)
+- [x] Location (Android + iOS)
+- [x] Media (Android + iOS)
 - [x] Expo Config Plugin
 - [ ] Usage Access (Android)
 - [ ] Write System Settings (Android)
