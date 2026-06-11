@@ -109,7 +109,6 @@ The goal is to provide a complete permission workflow with minimal integration e
 ## Planned Modules
 
 * permission-kit
-* screenshot-detector
 * alarm-manager
 * device-utils
 
@@ -120,7 +119,7 @@ plugins-playground/
 ├── app/
 ├── modules/
 │   ├── permission-kit/
-│   ├── screenshot-detector/
+
 │   └── future-modules/
 └── README.md
 ```

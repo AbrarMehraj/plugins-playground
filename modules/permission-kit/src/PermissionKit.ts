@@ -216,7 +216,14 @@ export async function checkNotifications() {
   };
 }
 
-export async function notifications() {
+export interface NotificationOptions {
+  /** If true, shows a native alert dialog when permission is permanently denied. */
+  showAlertConfig?: boolean;
+  /** Optional text for the native alert dialog. Uses defaults if not provided. */
+  alertConfig?: AlertConfig;
+}
+
+export async function notifications(opts?: NotificationOptions) {
   if (!NativeModule) {
     return { status: 'unavailable' as const };
   }
@@ -237,9 +244,21 @@ export async function notifications() {
     };
   }
 
-  // Permanently denied - return so developer can show a custom UI
+  // Permanently denied — show native alert if caller opted in
+  if (opts?.showAlertConfig === true) {
+    const title = opts.alertConfig?.title ?? 'Notifications Required';
+    const description = opts.alertConfig?.description ?? 'Please enable notifications in Settings to continue.';
+    await NativeModule.showPermissionAlertAndOpenSettings(title, description, 'notifications');
+  }
+
   return { status: 'denied' as const, canAskAgain: false };
 }
+
+export type LocationPermissionStatus =
+  | { status: 'granted' }
+  | { status: 'denied'; canAskAgain: boolean; error?: 'LOCATION_SERVICES_DISABLED' }
+  | { status: 'restricted' }
+  | { status: 'unavailable' };
 
 export type LocationResult =
   | { status: 'granted'; latitude: number; longitude: number; accuracy: number; altitude: number; timestamp: number }
@@ -248,31 +267,81 @@ export type LocationResult =
   | { status: 'restricted' }
   | { status: 'unavailable' };
 
-export async function checkLocation(): Promise<LocationResult> {
+export interface AlertConfig {
+  title: string;
+  description: string;
+}
+
+/**
+ * Read-only permission status check. No prompts, no GPS hardware.
+ * Use this to know the current state before calling location().
+ */
+export async function checkLocation(): Promise<LocationPermissionStatus> {
   if (!NativeModule) {
     return { status: 'unavailable' };
   }
   const s = await NativeModule.checkLocationStatus();
   if (s.restricted) return { status: 'restricted' };
-  if (s.granted) return {
-    status: 'granted',
-    latitude: 0, longitude: 0, accuracy: 0, altitude: 0, timestamp: 0,
+  if (s.granted) {
+    // Surface location services being off even when permission is granted
+    if (!s.servicesEnabled) {
+      return { status: 'denied', canAskAgain: false, error: 'LOCATION_SERVICES_DISABLED' };
+    }
+    return { status: 'granted' };
+  }
+  return {
+    status: 'denied',
+    canAskAgain: s.canAskAgain,
+    ...(s.servicesEnabled === false ? { error: 'LOCATION_SERVICES_DISABLED' as const } : {}),
   };
-  return { status: 'denied', canAskAgain: s.canAskAgain };
 }
 
-export async function location(opts?: { timeout?: number }): Promise<LocationResult> {
+export interface LocationOptions {
+  /** GPS timeout in milliseconds. Default: 10000ms */
+  timeout?: number;
+  /**
+   * If false, only requests the permission without fetching GPS coordinates.
+   * Resolves with { status: 'granted' } immediately after permission is granted.
+   * Default: true
+   */
+  fetchCoordinates?: boolean;
+  /** If true, shows a native alert dialog when permission is permanently denied. */
+  showAlertConfig?: boolean;
+  /** Optional text for the native alert dialog. Uses defaults if not provided. */
+  alertConfig?: AlertConfig;
+}
+
+export async function location(opts?: LocationOptions): Promise<LocationResult> {
   if (!NativeModule) {
     return { status: 'unavailable' };
   }
 
   const timeoutMs = opts?.timeout ?? 10000;
+  const fetchCoordinates = opts?.fetchCoordinates ?? true;
+
+  if (!fetchCoordinates) {
+    // Permission-only mode: request the permission but skip GPS fetch
+    const result = await NativeModule.requestLocationPermissionOnly();
+    return result as LocationResult;
+  }
 
   // The native layer handles the full lifecycle:
   //   - iOS: notDetermined → dialog → fetch | denied | restricted
   //   - Android: no permission → dialog → fetch | denied
   //   - Both: Location Services OFF → error
   const result = await NativeModule.requestLocation(timeoutMs);
+
+  // Show alert modal if permanently denied and caller opted in
+  if (
+    result.status === 'denied' &&
+    'canAskAgain' in result &&
+    result.canAskAgain === false &&
+    opts?.showAlertConfig === true
+  ) {
+    const title = opts.alertConfig?.title ?? 'Location Permission Required';
+    const description = opts.alertConfig?.description ?? 'Please enable location access in Settings to continue.';
+    await NativeModule.showPermissionAlertAndOpenSettings(title, description, 'location');
+  }
 
   return result as LocationResult;
 }

@@ -244,17 +244,23 @@ const result = await PermissionKit.checkDndAccess();
 
 ---
 
-### `PermissionKit.notifications()`
+### `PermissionKit.notifications(opts?: NotificationOptions)`
 
 Requests notification permission from the user using the correct industry-standard flow:
 
 - **First call**: Shows the native OS permission dialog (on both iOS and Android 13+).
 - **User taps "Allow"**: Returns `{ status: 'granted' }`.
 - **User taps "Don't Allow"**: Returns `{ status: 'denied', canAskAgain: true }`. The user's choice is respected — no forced redirect.
-- **Subsequent call (after permanent denial)**: Automatically opens the system Notification Settings for your app, waits for the user to return, and re-checks.
+- **Subsequent call (after permanent denial)**: Returns `{ status: 'denied', canAskAgain: false }`. If you pass `showAlertConfig: true`, it will automatically show a native alert explaining why the permission is needed and provide an "Open Settings" button that redirects the user directly to your app's Notification settings.
 
 ```ts
-const result = await PermissionKit.notifications();
+const result = await PermissionKit.notifications({
+  showAlertConfig: true,
+  alertConfig: {
+    title: 'Notifications Required',
+    description: 'Please enable notifications in Settings to stay updated.',
+  }
+});
 
 if (result.status === 'granted') {
   // Notifications are enabled — schedule your push token registration here
@@ -276,15 +282,20 @@ const result = await PermissionKit.checkNotifications();
 
 ---
 
-### `PermissionKit.location({ timeout?: number })`
+### `PermissionKit.location(opts?: LocationOptions)`
 
 Requests precise location permission from the user and fetches the coordinates using the correct industry-standard flow:
 
 - **First call**: Shows the native OS permission dialog (on both iOS and Android).
 - **User taps "Allow"**: Fetches GPS signal and returns `{ status: 'granted', latitude: number, longitude: number, accuracy: number, timestamp: number, altitude: number }`.
 - **User taps "Deny"**: Returns `{ status: 'denied', canAskAgain: true }`. The user's choice is respected — no forced redirect.
-- **Subsequent call (after permanent denial)**: Automatically opens the system Location Settings for your app, waits for the user to return, and re-attempts the GPS fetch.
+- **Subsequent call (after permanent denial)**: Returns `{ status: 'denied', canAskAgain: false }`. If you pass `showAlertConfig: true`, it will automatically show a native alert explaining why the permission is needed and provide an "Open Settings" button that redirects the user directly to your app's Location settings.
 - **Location Services Off**: If global location services (GPS) are disabled, it automatically prompts the user natively to turn them on (via Google Play Services on Android). If they tap "No thanks", or if you're on a device without Play Services, it aborts and returns `{ status: 'denied', error: 'LOCATION_SERVICES_DISABLED' }`. This gives you full control to show a custom explanation dialog before manually calling `PermissionKit.openLocationSettings()`.
+
+**Options:**
+- `timeoutMs`: GPS fetch timeout (default `10000`ms).
+- `fetchCoordinates`: If `false`, acts as a "permission only" request without turning on the GPS hardware (default `true`).
+- `showAlertConfig`: If `true`, shows a native alert to navigate to Settings when permanently denied.
 
 **Return Type:**
 ```ts
@@ -296,7 +307,15 @@ type LocationResult =
 ```
 
 ```ts
-const result = await PermissionKit.location({ timeout: 15000 });
+const result = await PermissionKit.location({
+  timeoutMs: 15000,
+  fetchCoordinates: true,
+  showAlertConfig: true,
+  alertConfig: {
+    title: 'Location Required',
+    description: 'We need your location to show nearby restaurants.'
+  }
+});
 
 if (result.status === 'granted') {
   console.log(`Lat: ${result.latitude}, Lng: ${result.longitude}`);
@@ -336,6 +355,8 @@ const result = await PermissionKit.checkLocation();
 | Media                 | ✅      | ✅ |
 
 > **iOS Note**: Battery Optimization, Overlay, Exact Alarm, Accessibility Service, and DND Access are Android-only concepts. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI. Notifications, Location, and Media are natively supported on both platforms.
+
+> **Simulator Note**: When testing on the iOS Simulator, calling `openSettings()` or pressing the "Open Settings" button in the permission alert may open the Settings App's home screen instead of the specific app's settings page. This is a known iOS Simulator bug. Testing on a real physical device will correctly open the specific app's settings.
 
 ---
 

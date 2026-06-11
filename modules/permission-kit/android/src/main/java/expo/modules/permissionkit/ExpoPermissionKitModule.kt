@@ -17,6 +17,27 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.LocationSettingsRequest
 import com.google.android.gms.location.Priority
 import android.app.Activity
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -462,6 +483,126 @@ class ExpoPermissionKitModule : Module() {
         android.Manifest.permission.ACCESS_FINE_LOCATION,
         android.Manifest.permission.ACCESS_COARSE_LOCATION
       )
+    }
+
+    AsyncFunction("requestLocationPermissionOnly") { promise: expo.modules.kotlin.Promise ->
+      val permissionsManager = appContext.permissions
+      if (permissionsManager == null) {
+        promise.reject("E_NO_PERMISSIONS", "Permissions module is null", null)
+        return@AsyncFunction
+      }
+
+      permissionsManager.askForPermissions(
+        { response ->
+          val finePerm = response[android.Manifest.permission.ACCESS_FINE_LOCATION]
+          val coarsePerm = response[android.Manifest.permission.ACCESS_COARSE_LOCATION]
+          val granted = finePerm?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED ||
+            coarsePerm?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED
+          val canAskAgain = finePerm?.canAskAgain ?: true
+
+          if (granted) {
+            promise.resolve(mapOf("status" to "granted"))
+          } else {
+            promise.resolve(mapOf("status" to "denied", "canAskAgain" to canAskAgain))
+          }
+        },
+        android.Manifest.permission.ACCESS_FINE_LOCATION,
+        android.Manifest.permission.ACCESS_COARSE_LOCATION
+      )
+    }
+
+    AsyncFunction("showPermissionAlertAndOpenSettings") { title: String, description: String, settingsType: String, promise: expo.modules.kotlin.Promise ->
+      val context = appContext.reactContext ?: run {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      val activity = appContext.activityProvider?.currentActivity ?: run {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+
+      android.os.Handler(android.os.Looper.getMainLooper()).post {
+        var promiseResolved = false
+
+        val dialog = android.app.Dialog(activity)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val resolveSafely = {
+          if (!promiseResolved) {
+            promiseResolved = true
+            promise.resolve(null)
+          }
+        }
+
+        dialog.setOnDismissListener { resolveSafely() }
+
+        val composeView = ComposeView(activity).apply {
+          setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+          setContent {
+            MaterialTheme {
+              Surface(
+                shape = RoundedCornerShape(28.dp),
+                tonalElevation = 6.dp,
+                color = MaterialTheme.colorScheme.surface
+              ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                  Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                  )
+                  Spacer(modifier = Modifier.height(16.dp))
+                  Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                  Spacer(modifier = Modifier.height(24.dp))
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                  ) {
+                    OutlinedButton(onClick = { dialog.dismiss() }) {
+                      Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                      onClick = {
+                        val intent = if (settingsType == "notifications" && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                          Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                          }
+                        } else {
+                          Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = android.net.Uri.fromParts("package", context.packageName, null)
+                          }
+                        }
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        dialog.dismiss()
+                      }
+                    ) {
+                      Text("Open Settings")
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Ensure lifecycle owners are set for Compose
+        val lifecycleOwner = activity as? androidx.lifecycle.LifecycleOwner
+        val savedStateRegistryOwner = activity as? androidx.savedstate.SavedStateRegistryOwner
+        val viewModelStoreOwner = activity as? androidx.lifecycle.ViewModelStoreOwner
+
+        composeView.setViewTreeLifecycleOwner(lifecycleOwner)
+        composeView.setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
+        composeView.setViewTreeViewModelStoreOwner(viewModelStoreOwner)
+
+        dialog.setContentView(composeView)
+        dialog.show()
+      }
     }
 
     AsyncFunction("openLocationSettings") {

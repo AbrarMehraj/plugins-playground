@@ -27,6 +27,14 @@ export interface PermissionKitNativeModule {
     | { status: 'denied'; error: 'LOCATION_SERVICES_DISABLED' }
     | { status: 'restricted' }
   >;
+  /** Request location permission only — no GPS fetch. */
+  requestLocationPermissionOnly(): Promise<
+    | { status: 'granted' }
+    | { status: 'denied'; canAskAgain: boolean }
+    | { status: 'restricted' }
+  >;
+  /** Show a native alert dialog guiding the user to Settings. Resolves when dismissed. */
+  showPermissionAlertAndOpenSettings(title: string, description: string, settingsType: string): Promise<void>;
   openLocationSettings(): Promise<void>;
   openAppLocationSettings(): Promise<void>;
   checkMediaStatus(type: string): Promise<{

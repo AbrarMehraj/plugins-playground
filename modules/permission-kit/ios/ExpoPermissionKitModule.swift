@@ -8,7 +8,7 @@ import MediaPlayer
 // CLLocationManager must live on the main thread. We keep strong
 // references here so the delegate isn't deallocated before it fires.
 private var _locationManager: CLLocationManager?
-private var _locationDelegate: LocationDelegate?
+private var _locationDelegate: (NSObject & CLLocationManagerDelegate)?
 
 public class ExpoPermissionKitModule: Module {
   public func definition() -> ModuleDefinition {
@@ -137,6 +137,71 @@ public class ExpoPermissionKitModule: Module {
       }
     }
 
+    AsyncFunction("requestLocationPermissionOnly") { (promise: Promise) in
+      // Request permission only — no GPS fetch
+      DispatchQueue.main.async {
+        let manager = CLLocationManager()
+        let status = manager.authorizationStatus
+
+        switch status {
+        case .authorizedWhenInUse, .authorizedAlways:
+          promise.resolve(["status": "granted"])
+        case .denied:
+          promise.resolve(["status": "denied", "canAskAgain": false])
+        case .restricted:
+          promise.resolve(["status": "restricted"])
+        case .notDetermined:
+          // Need to request — use a one-shot delegate just for the dialog
+          let delegate = PermissionOnlyDelegate(promise: promise)
+          let newManager = CLLocationManager()
+          newManager.delegate = delegate
+          delegate.manager = newManager
+          _locationDelegate = delegate
+          _locationManager = newManager
+          newManager.requestWhenInUseAuthorization()
+        @unknown default:
+          promise.resolve(["status": "denied", "canAskAgain": false])
+        }
+      }
+    }
+
+    AsyncFunction("showPermissionAlertAndOpenSettings") { (title: String, description: String, settingsType: String, promise: Promise) in
+      DispatchQueue.main.async {
+        guard let windowScene = UIApplication.shared.connectedScenes
+          .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+          let rootVC = windowScene.windows.first?.rootViewController else {
+          promise.resolve(nil)
+          return
+        }
+        var topVC = rootVC
+        while let presented = topVC.presentedViewController {
+          topVC = presented
+        }
+
+        let alert = UIAlertController(title: title, message: description, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+          promise.resolve(nil)
+        })
+        alert.addAction(UIAlertAction(title: "Open Settings", style: .default) { _ in
+          // Explicitly dismiss the alert and wait for the completion
+          // before opening the URL to avoid transition race conditions.
+          topVC.dismiss(animated: true) {
+            var urlString = UIApplication.openSettingsURLString
+            if settingsType == "notifications" {
+              if #available(iOS 16.0, *) {
+                urlString = UIApplication.openNotificationSettingsURLString
+              }
+            }
+            if let url = URL(string: urlString) {
+              UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            }
+            promise.resolve(nil)
+          }
+        })
+        topVC.present(alert, animated: true)
+      }
+    }
+
     AsyncFunction("openLocationSettings") { () -> Void in
       // Opens app-specific Settings on iOS (there's no separate system Location page)
       if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -208,7 +273,7 @@ public class ExpoPermissionKitModule: Module {
           promise.resolve(["status": "restricted", "canAskAgain": false])
         case .notDetermined:
           promise.resolve(["status": "denied", "canAskAgain": true])
-        @unknown default:
+        default:
           promise.resolve(["status": "denied", "canAskAgain": false])
         }
       }
@@ -267,7 +332,7 @@ public class ExpoPermissionKitModule: Module {
             promise.resolve(["status": "restricted", "canAskAgain": false])
           case .notDetermined:
             promise.resolve(["status": "denied", "canAskAgain": true])
-          @unknown default:
+          default:
             promise.resolve(["status": "denied", "canAskAgain": false])
           }
         }
@@ -289,7 +354,9 @@ public class ExpoPermissionKitModule: Module {
     AsyncFunction("presentLimitedLibraryPicker") { () -> Void in
       if #available(iOS 14, *) {
         DispatchQueue.main.async {
-          guard let rootVC = UIApplication.shared.windows.first?.rootViewController else { return }
+          guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+            let rootVC = windowScene.windows.first?.rootViewController else { return }
           var topVC = rootVC
           while let presented = topVC.presentedViewController {
               topVC = presented
@@ -364,6 +431,45 @@ private class LocationDelegate: NSObject, CLLocationManagerDelegate {
     timer?.invalidate()
     timer = nil
     _locationManager?.stopUpdatingLocation()
+    _locationManager = nil
+    _locationDelegate = nil
+    promise.resolve(result)
+  }
+}
+
+// ── PermissionOnlyDelegate ────────────────────────────────────────────────────
+// A lightweight delegate used by requestLocationPermissionOnly — shows the
+// OS dialog but never calls requestLocation() afterward.
+
+private class PermissionOnlyDelegate: NSObject, CLLocationManagerDelegate {
+  private let promise: Promise
+  private var settled = false
+  var manager: CLLocationManager?
+
+  init(promise: Promise) {
+    self.promise = promise
+    super.init()
+  }
+
+  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    switch manager.authorizationStatus {
+    case .authorizedWhenInUse, .authorizedAlways:
+      resolve(["status": "granted"])
+    case .denied:
+      resolve(["status": "denied", "canAskAgain": false])
+    case .restricted:
+      resolve(["status": "restricted"])
+    case .notDetermined:
+      break // still waiting for user to tap
+    @unknown default:
+      resolve(["status": "denied", "canAskAgain": false])
+    }
+  }
+
+  private func resolve(_ result: [String: Any]) {
+    guard !settled else { return }
+    settled = true
+    self.manager = nil
     _locationManager = nil
     _locationDelegate = nil
     promise.resolve(result)
