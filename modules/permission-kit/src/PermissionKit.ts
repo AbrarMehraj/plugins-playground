@@ -1,6 +1,15 @@
-import { AppState, Platform } from 'react-native';
+import { Alert, AppState, Platform, ToastAndroid } from 'react-native';
 import NativeModule from './ExpoPermissionKitModule';
 import { MediaOptions, MediaResult } from './types';
+
+// Fallback native message (Toast for Android, Alert for iOS)
+const showNativeMessage = (message: string) => {
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(message, ToastAndroid.LONG);
+  } else {
+    Alert.alert('Notice', message, [{ text: 'OK' }]);
+  }
+};
 
 export async function checkBatteryOptimization() {
   if (Platform.OS === 'ios' || !NativeModule) {
@@ -309,6 +318,14 @@ export interface LocationOptions {
   showAlertConfig?: boolean;
   /** Optional text for the native alert dialog. Uses defaults if not provided. */
   alertConfig?: AlertConfig;
+  /** If true, automatically shows native UI messages (Toast on Android, Alert on iOS) for common location errors like timeout or services disabled. */
+  showErrorAlerts?: boolean;
+  /** Custom messages to display when showErrorAlerts is true. */
+  errorMessages?: {
+    servicesDisabled?: string;
+    timeout?: string;
+    unavailable?: string;
+  };
 }
 
 export async function location(opts?: LocationOptions): Promise<LocationResult> {
@@ -341,6 +358,19 @@ export async function location(opts?: LocationOptions): Promise<LocationResult> 
     const title = opts.alertConfig?.title ?? 'Location Permission Required';
     const description = opts.alertConfig?.description ?? 'Please enable location access in Settings to continue.';
     await NativeModule.showPermissionAlertAndOpenSettings(title, description, 'location');
+  }
+
+  // Show native error toasts/alerts by default (unless explicitly opted out)
+  const showErrorAlerts = opts?.showErrorAlerts ?? true;
+
+  if (showErrorAlerts) {
+    if (result.status === 'denied' && 'error' in result && result.error === 'LOCATION_SERVICES_DISABLED') {
+      showNativeMessage(opts?.errorMessages?.servicesDisabled ?? 'Please turn on location services to continue.');
+    } else if (result.status === 'granted' && 'error' in result && result.error === 'TIMEOUT') {
+      showNativeMessage(opts?.errorMessages?.timeout ?? 'Taking too long to find your location. Make sure you have a clear view of the sky.');
+    } else if (result.status === 'granted' && 'error' in result && result.error === 'LOCATION_UNAVAILABLE') {
+      showNativeMessage(opts?.errorMessages?.unavailable ?? 'Location unavailable. Please check your device settings.');
+    }
   }
 
   return result as LocationResult;

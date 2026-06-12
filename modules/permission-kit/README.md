@@ -296,6 +296,8 @@ Requests precise location permission from the user and fetches the coordinates u
 - `timeoutMs`: GPS fetch timeout (default `10000`ms).
 - `fetchCoordinates`: If `false`, acts as a "permission only" request without turning on the GPS hardware (default `true`).
 - `showAlertConfig`: If `true`, shows a native alert to navigate to Settings when permanently denied.
+- `showErrorAlerts`: If `true`, automatically shows native UI messages (Toast on Android, Alert on iOS) for common location errors like timeout or services disabled (default `true`).
+- `errorMessages`: Optional object to override the default error messages shown by `showErrorAlerts`.
 
 **Return Type:**
 ```ts
