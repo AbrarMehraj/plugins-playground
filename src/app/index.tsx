@@ -52,6 +52,11 @@ export default function HomeScreen() {
       action: () => PermissionKit.exactAlarm(),
     },
     {
+      label: 'Full Screen Intent',
+      sublabel: 'Use full screen intents',
+      action: () => PermissionKit.fullScreenIntent(),
+    },
+    {
       label: 'Accessibility Service',
       sublabel: 'Assistive access',
       action: () => PermissionKit.accessibility({ androidServicePath: '.MockAccessibilityService' }),

@@ -7,6 +7,8 @@ export interface PermissionKitNativeModule {
   openOverlayPermissionSettings(): Promise<void>;
   isExactAlarmPermissionEnabled(): Promise<boolean>;
   openExactAlarmSettings(): Promise<void>;
+  isFullScreenIntentPermissionEnabled(): Promise<boolean>;
+  openFullScreenIntentSettings(): Promise<void>;
   isAccessibilityPermissionEnabled(serviceName: string): Promise<boolean>;
   openAccessibilitySettings(): Promise<void>;
   isDndAccessPermissionEnabled(): Promise<boolean>;

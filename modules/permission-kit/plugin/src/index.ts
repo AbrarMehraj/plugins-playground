@@ -24,6 +24,7 @@ const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
     permissions.includes('batteryOptimization') ||
     permissions.includes('overlay') ||
     permissions.includes('exactAlarm') ||
+    permissions.includes('fullScreenIntent') ||
     permissions.includes('dndAccess') ||
     permissions.includes('notifications') ||
     permissions.includes('location') ||
@@ -63,6 +64,15 @@ const withPermissionKit: ConfigPlugin<PermissionKitPluginProps> = (
       ) {
         androidManifest.manifest['uses-permission'].push({
           $: { 'android:name': 'android.permission.SCHEDULE_EXACT_ALARM' },
+        });
+      }
+
+      if (
+        permissions.includes('fullScreenIntent') &&
+        !existingPermissions.includes('android.permission.USE_FULL_SCREEN_INTENT')
+      ) {
+        androidManifest.manifest['uses-permission'].push({
+          $: { 'android:name': 'android.permission.USE_FULL_SCREEN_INTENT' },
         });
       }
 

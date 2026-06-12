@@ -36,7 +36,7 @@ In your `app.json`, add the plugin and specify the permissions you want:
       [
         "@abrarmehraj/permission-kit",
         {
-          "permissions": ["batteryOptimization", "overlay", "exactAlarm", "dndAccess", "notifications", "location", "media"],
+          "permissions": ["batteryOptimization", "overlay", "exactAlarm", "fullScreenIntent", "dndAccess", "notifications", "location", "media"],
           "locationDescription": "Used to show your current position.",
           "photoDescription": "Used to pick a profile picture.",
           "appleMusicDescription": "Used to pick audio."
@@ -67,6 +67,7 @@ Add the required permissions to your `android/app/src/main/AndroidManifest.xml` 
 <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -190,6 +191,28 @@ Check the current exact alarm status without opening settings.
 
 ```ts
 const result = await PermissionKit.checkExactAlarm();
+```
+
+---
+
+### `PermissionKit.fullScreenIntent()`
+
+Checks if the app is allowed to use full-screen intents (Android 14+ requirement). If not, automatically opens the Android "Full screen intents" settings, waits for the user to return, and re-checks on resume.
+
+```ts
+const result = await PermissionKit.fullScreenIntent();
+
+if (result.status === 'granted') {
+  // App is allowed to use full screen intents
+}
+```
+
+### `PermissionKit.checkFullScreenIntent()`
+
+Check the current full screen intent status without opening settings.
+
+```ts
+const result = await PermissionKit.checkFullScreenIntent();
 ```
 
 ---
@@ -354,13 +377,14 @@ const result = await PermissionKit.checkLocation();
 | Battery Optimization  | ✅      | ⚠️ `unavailable` |
 | Overlay Permission    | ✅      | ⚠️ `unavailable` |
 | Exact Alarm           | ✅      | ⚠️ `unavailable` |
+| Full Screen Intent    | ✅      | ⚠️ `unavailable` |
 | Accessibility Service | ✅      | ⚠️ `unavailable` |
 | Do Not Disturb Access | ✅      | ⚠️ `unavailable` |
 | Notifications         | ✅      | ✅ |
 | Location              | ✅      | ✅ |
 | Media                 | ✅      | ✅ |
 
-> **iOS Note**: Battery Optimization, Overlay, Exact Alarm, Accessibility Service, and DND Access are Android-only concepts. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI. Notifications, Location, and Media are natively supported on both platforms.
+> **iOS Note**: Battery Optimization, Overlay, Exact Alarm, Full Screen Intent, Accessibility Service, and DND Access are Android-only concepts. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI. Notifications, Location, and Media are natively supported on both platforms.
 
 > **Simulator Note**: When testing on the iOS Simulator, calling `openSettings()` or pressing the "Open Settings" button in the permission alert may open the Settings App's home screen instead of the specific app's settings page. This is a known iOS Simulator bug. Testing on a real physical device will correctly open the specific app's settings.
 
@@ -371,6 +395,7 @@ const result = await PermissionKit.checkLocation();
 - [x] Battery Optimization (Android)
 - [x] Overlay Permission (Android)
 - [x] Exact Alarm (Android)
+- [x] Full Screen Intent (Android)
 - [x] Accessibility Service (Android)
 - [x] Do Not Disturb Access (Android)
 - [x] Notifications (Android + iOS)

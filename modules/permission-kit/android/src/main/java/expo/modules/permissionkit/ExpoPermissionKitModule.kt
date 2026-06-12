@@ -228,6 +228,38 @@ class ExpoPermissionKitModule : Module() {
       }
     }
 
+    AsyncFunction("isFullScreenIntentPermissionEnabled") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        return@AsyncFunction notificationManager.canUseFullScreenIntent()
+      }
+      return@AsyncFunction true
+    }
+
+    AsyncFunction("openFullScreenIntentSettings") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      val packageName = context.packageName
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (!hasManifestPermission(android.Manifest.permission.USE_FULL_SCREEN_INTENT)) {
+          throw Exception("MISSING_PERMISSION: Add 'fullScreenIntent' to your app.json plugin")
+        }
+
+        val intent = Intent(
+          Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+          Uri.parse("package:$packageName")
+        )
+
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+      }
+    }
+
     AsyncFunction("isAccessibilityPermissionEnabled") { serviceName: String ->
       val context = appContext.reactContext
         ?: throw Exception("Context unavailable")

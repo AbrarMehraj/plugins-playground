@@ -145,6 +145,44 @@ export async function exactAlarm() {
   return await checkExactAlarm();
 }
 
+export async function checkFullScreenIntent() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+  const enabled = await NativeModule.isFullScreenIntentPermissionEnabled();
+  return {
+    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
+  };
+}
+
+export async function fullScreenIntent() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+
+  const check = await checkFullScreenIntent();
+
+  if (check.status === 'granted') {
+    return check;
+  }
+
+  try {
+    await NativeModule.openFullScreenIntentSettings();
+  } catch (error: any) {
+    if (error?.message?.includes('MISSING_PERMISSION')) {
+      console.warn(
+        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'fullScreenIntent' to your app.json plugin."
+      );
+      return { status: 'denied' as const };
+    }
+    throw error;
+  }
+
+  await waitForResume();
+
+  return await checkFullScreenIntent();
+}
+
 export interface AccessibilityOptions {
   androidServicePath: string;
 }
@@ -445,6 +483,8 @@ export const PermissionKit = {
   checkOverlay,
   exactAlarm,
   checkExactAlarm,
+  fullScreenIntent,
+  checkFullScreenIntent,
   accessibility,
   checkAccessibility,
   dndAccess,

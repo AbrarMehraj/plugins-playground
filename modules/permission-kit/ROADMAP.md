@@ -4,6 +4,7 @@
 - [x] Battery Optimization (Android)
 - [x] Overlay Permission (Android)
 - [x] Exact Alarm (Android)
+- [x] Full Screen Intent (Android)
 - [x] Accessibility Service (Android)
 - [x] Do Not Disturb Access (Android)
 - [x] Notifications (Android + iOS)
