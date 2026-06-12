@@ -293,7 +293,11 @@ Requests precise location permission from the user and fetches the coordinates u
 - **Location Services Off**: If global location services (GPS) are disabled, it automatically prompts the user natively to turn them on (via Google Play Services on Android). If they tap "No thanks", or if you're on a device without Play Services, it aborts and returns `{ status: 'denied', error: 'LOCATION_SERVICES_DISABLED' }`. This gives you full control to show a custom explanation dialog before manually calling `PermissionKit.openLocationSettings()`.
 
 **Options:**
-- `timeoutMs`: GPS fetch timeout (default `10000`ms).
+- `timeout`: GPS fetch timeout in ms (default `10000`ms).
+- `accuracy`: Location accuracy level (default `'balanced'`):
+  - `'high'`: GPS-level precision (~5m). Slower, uses more battery.
+  - `'balanced'`: Wi-Fi/Cell tower precision (~100m). Fast, battery-friendly.
+  - `'low'`: City-level precision (~1km). Fastest, minimal battery.
 - `fetchCoordinates`: If `false`, acts as a "permission only" request without turning on the GPS hardware (default `true`).
 - `showAlertConfig`: If `true`, shows a native alert to navigate to Settings when permanently denied.
 - `showErrorAlerts`: If `true`, automatically shows native UI messages (Toast on Android, Alert on iOS) for common location errors like timeout or services disabled (default `true`).

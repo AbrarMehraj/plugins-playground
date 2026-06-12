@@ -305,9 +305,18 @@ export async function checkLocation(): Promise<LocationPermissionStatus> {
   };
 }
 
+export type LocationAccuracy = 'high' | 'balanced' | 'low';
+
 export interface LocationOptions {
   /** GPS timeout in milliseconds. Default: 10000ms */
   timeout?: number;
+  /**
+   * Location accuracy level. Default: 'balanced'.
+   * - 'high': GPS-level precision (~5m). Slower, uses more battery.
+   * - 'balanced': Wi-Fi/Cell tower precision (~100m). Fast, battery-friendly.
+   * - 'low': City-level precision (~1km). Fastest, minimal battery.
+   */
+  accuracy?: LocationAccuracy;
   /**
    * If false, only requests the permission without fetching GPS coordinates.
    * Resolves with { status: 'granted' } immediately after permission is granted.
@@ -318,7 +327,7 @@ export interface LocationOptions {
   showAlertConfig?: boolean;
   /** Optional text for the native alert dialog. Uses defaults if not provided. */
   alertConfig?: AlertConfig;
-  /** If true, automatically shows native UI messages (Toast on Android, Alert on iOS) for common location errors like timeout or services disabled. */
+  /** If true, automatically shows native UI messages (Toast on Android, Alert on iOS) for common location errors like timeout or services disabled. Default: true */
   showErrorAlerts?: boolean;
   /** Custom messages to display when showErrorAlerts is true. */
   errorMessages?: {
@@ -334,6 +343,7 @@ export async function location(opts?: LocationOptions): Promise<LocationResult> 
   }
 
   const timeoutMs = opts?.timeout ?? 10000;
+  const accuracy = opts?.accuracy ?? 'balanced';
   const fetchCoordinates = opts?.fetchCoordinates ?? true;
 
   if (!fetchCoordinates) {
@@ -346,7 +356,7 @@ export async function location(opts?: LocationOptions): Promise<LocationResult> 
   //   - iOS: notDetermined → dialog → fetch | denied | restricted
   //   - Android: no permission → dialog → fetch | denied
   //   - Both: Location Services OFF → error
-  const result = await NativeModule.requestLocation(timeoutMs);
+  const result = await NativeModule.requestLocation(timeoutMs, accuracy);
 
   // Show alert modal if permanently denied and caller opted in
   if (
@@ -367,7 +377,7 @@ export async function location(opts?: LocationOptions): Promise<LocationResult> 
     if (result.status === 'denied' && 'error' in result && result.error === 'LOCATION_SERVICES_DISABLED') {
       showNativeMessage(opts?.errorMessages?.servicesDisabled ?? 'Please turn on location services to continue.');
     } else if (result.status === 'granted' && 'error' in result && result.error === 'TIMEOUT') {
-      showNativeMessage(opts?.errorMessages?.timeout ?? 'Taking too long to find your location. Make sure you have a clear view of the sky.');
+      showNativeMessage(opts?.errorMessages?.timeout ?? 'Could not determine your location in time. Please try again.');
     } else if (result.status === 'granted' && 'error' in result && result.error === 'LOCATION_UNAVAILABLE') {
       showNativeMessage(opts?.errorMessages?.unavailable ?? 'Location unavailable. Please check your device settings.');
     }

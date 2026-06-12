@@ -93,7 +93,7 @@ public class ExpoPermissionKitModule: Module {
       ]
     }
 
-    AsyncFunction("requestLocation") { (timeoutMs: Int, promise: Promise) in
+    AsyncFunction("requestLocation") { (timeoutMs: Int, accuracy: String, promise: Promise) in
       // 1. Check system-level Location Services first
       guard CLLocationManager.locationServicesEnabled() else {
         promise.resolve([
@@ -105,11 +105,11 @@ public class ExpoPermissionKitModule: Module {
 
       // 2. Delegate handles the full lifecycle on the main thread
       DispatchQueue.main.async {
-        let delegate = LocationDelegate(promise: promise, timeoutMs: timeoutMs)
+        let delegate = LocationDelegate(promise: promise, timeoutMs: timeoutMs, accuracy: accuracy)
         _locationDelegate = delegate
         _locationManager = CLLocationManager()
         _locationManager?.delegate = delegate
-        _locationManager?.desiredAccuracy = kCLLocationAccuracyBest
+        _locationManager?.desiredAccuracy = delegate.desiredAccuracy
 
         let status = _locationManager!.authorizationStatus
 
@@ -374,9 +374,19 @@ private class LocationDelegate: NSObject, CLLocationManagerDelegate {
   private let promise: Promise
   private var settled = false
   private var timer: Timer?
+  let desiredAccuracy: CLLocationAccuracy
 
-  init(promise: Promise, timeoutMs: Int) {
+  init(promise: Promise, timeoutMs: Int, accuracy: String) {
     self.promise = promise
+    // Map JS accuracy string to CoreLocation constants
+    switch accuracy {
+    case "high":
+      self.desiredAccuracy = kCLLocationAccuracyBest
+    case "low":
+      self.desiredAccuracy = kCLLocationAccuracyKilometer
+    default:
+      self.desiredAccuracy = kCLLocationAccuracyHundredMeters
+    }
     super.init()
     // Start timeout timer
     let seconds = Double(timeoutMs) / 1000.0

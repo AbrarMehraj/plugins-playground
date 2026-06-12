@@ -2,11 +2,9 @@ package expo.modules.permissionkit
 
 import android.content.Intent
 import android.location.Location
-import android.location.LocationListener
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import android.os.PowerManager
 import android.os.Environment
 import android.provider.Settings
@@ -46,70 +44,55 @@ class ExpoPermissionKitModule : Module() {
 
   private var pendingLocationPromise: expo.modules.kotlin.Promise? = null
   private var pendingLocationTimeoutMs: Int = 10000
+  private var pendingLocationAccuracy: String = "balanced"
   private val LOCATION_SETTINGS_REQUEST_CODE = 9991
 
-  private fun fetchCoordinates(timeoutMs: Int, promise: expo.modules.kotlin.Promise) {
+  private fun fetchCoordinates(timeoutMs: Int, accuracy: String, promise: expo.modules.kotlin.Promise) {
     val context = appContext.reactContext ?: return
-    val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
     var settled = false
     val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
     val timeoutRunnable = Runnable {
       if (!settled) {
         settled = true
-        locationManager.removeUpdates(object : LocationListener {
-          override fun onLocationChanged(l: Location) {}
-        })
         promise.resolve(mapOf("status" to "granted", "error" to "TIMEOUT"))
       }
     }
     handler.postDelayed(timeoutRunnable, timeoutMs.toLong())
 
-    val listener = object : LocationListener {
-      override fun onLocationChanged(location: Location) {
-        if (settled) return
-        settled = true
-        handler.removeCallbacks(timeoutRunnable)
-        locationManager.removeUpdates(this)
-        promise.resolve(mapOf(
-          "status" to "granted",
-          "latitude" to location.latitude,
-          "longitude" to location.longitude,
-          "accuracy" to location.accuracy.toDouble(),
-          "altitude" to location.altitude,
-          "timestamp" to location.time.toDouble()
-        ))
-      }
-
-      override fun onProviderDisabled(provider: String) {
-        if (settled) return
-        settled = true
-        handler.removeCallbacks(timeoutRunnable)
-        locationManager.removeUpdates(this)
-        promise.resolve(mapOf("status" to "granted", "error" to "LOCATION_UNAVAILABLE"))
-      }
-
-      @Deprecated("Deprecated in Java")
-      override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-    }
-
-    val provider = when {
-      locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-      locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-      else -> null
-    }
-
-    if (provider == null) {
-      settled = true
-      handler.removeCallbacks(timeoutRunnable)
-      promise.resolve(mapOf("status" to "granted", "error" to "LOCATION_UNAVAILABLE"))
-      return
+    // Map JS accuracy string to Google Play Services priority
+    val priority = when (accuracy) {
+      "high" -> Priority.PRIORITY_HIGH_ACCURACY
+      "low" -> Priority.PRIORITY_LOW_POWER
+      else -> Priority.PRIORITY_BALANCED_POWER_ACCURACY
     }
 
     try {
-      handler.post {
-        locationManager.requestLocationUpdates(provider, 0L, 0f, listener)
-      }
+      val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+      fusedLocationClient.getCurrentLocation(priority, null)
+        .addOnSuccessListener { location: Location? ->
+          if (settled) return@addOnSuccessListener
+          settled = true
+          handler.removeCallbacks(timeoutRunnable)
+          if (location != null) {
+            promise.resolve(mapOf(
+              "status" to "granted",
+              "latitude" to location.latitude,
+              "longitude" to location.longitude,
+              "accuracy" to location.accuracy.toDouble(),
+              "altitude" to location.altitude,
+              "timestamp" to location.time.toDouble()
+            ))
+          } else {
+            promise.resolve(mapOf("status" to "granted", "error" to "LOCATION_UNAVAILABLE"))
+          }
+        }
+        .addOnFailureListener {
+          if (settled) return@addOnFailureListener
+          settled = true
+          handler.removeCallbacks(timeoutRunnable)
+          promise.resolve(mapOf("status" to "granted", "error" to "LOCATION_UNAVAILABLE"))
+        }
     } catch (e: SecurityException) {
       settled = true
       handler.removeCallbacks(timeoutRunnable)
@@ -133,11 +116,12 @@ class ExpoPermissionKitModule : Module() {
       if (payload.requestCode == LOCATION_SETTINGS_REQUEST_CODE) {
         val promise = pendingLocationPromise
         val timeoutMs = pendingLocationTimeoutMs
+        val accuracy = pendingLocationAccuracy
         pendingLocationPromise = null
         if (promise == null) return@OnActivityResult
 
         if (payload.resultCode == Activity.RESULT_OK) {
-          fetchCoordinates(timeoutMs, promise)
+          fetchCoordinates(timeoutMs, accuracy, promise)
         } else {
           promise.resolve(mapOf("status" to "denied", "error" to "LOCATION_SERVICES_DISABLED"))
         }
@@ -410,7 +394,7 @@ class ExpoPermissionKitModule : Module() {
       )
     }
 
-        AsyncFunction("requestLocation") { timeoutMs: Int, promise: expo.modules.kotlin.Promise ->
+        AsyncFunction("requestLocation") { timeoutMs: Int, accuracy: String, promise: expo.modules.kotlin.Promise ->
       val context = appContext.reactContext ?: throw Exception("Context unavailable")
       
       // 1. Request runtime permission first
@@ -444,7 +428,7 @@ class ExpoPermissionKitModule : Module() {
 
           if (servicesEnabled) {
             // Already enabled, fetch directly
-            fetchCoordinates(timeoutMs, promise)
+            fetchCoordinates(timeoutMs, accuracy, promise)
           } else {
             // 3. Location disabled — use Google Play Services to prompt the user
             val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000).build()
@@ -453,7 +437,7 @@ class ExpoPermissionKitModule : Module() {
             
             client.checkLocationSettings(builder.build())
               .addOnSuccessListener {
-                fetchCoordinates(timeoutMs, promise)
+                fetchCoordinates(timeoutMs, accuracy, promise)
               }
               .addOnFailureListener { exception ->
                 if (exception is ResolvableApiException) {
@@ -462,7 +446,7 @@ class ExpoPermissionKitModule : Module() {
                     if (activity != null) {
                       pendingLocationPromise = promise
                       pendingLocationTimeoutMs = timeoutMs
-                      // Use Expo's way to start intent sender if possible, or just activity.startIntentSenderForResult
+                      pendingLocationAccuracy = accuracy
                       activity.startIntentSenderForResult(
                         exception.resolution.intentSender,
                         LOCATION_SETTINGS_REQUEST_CODE,
