@@ -20,7 +20,7 @@ export interface PermissionKitNativeModule {
     restricted: boolean;
     servicesEnabled: boolean;
   }>;
-  requestLocation(timeoutMs: number): Promise<
+  requestLocation(timeoutMs: number, accuracy: string): Promise<
     | { status: 'granted'; latitude: number; longitude: number; accuracy: number; altitude: number; timestamp: number }
     | { status: 'granted'; error: 'TIMEOUT' | 'LOCATION_UNAVAILABLE' }
     | { status: 'denied'; canAskAgain: boolean }
