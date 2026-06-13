@@ -10,6 +10,7 @@ const withPermissionKit = (config, props) => {
     // ─── Android Manifest permissions ───────────────────────────────────────────
     if (permissions.includes('batteryOptimization') ||
         permissions.includes('overlay') ||
+        permissions.includes('usageStats') ||
         permissions.includes('exactAlarm') ||
         permissions.includes('fullScreenIntent') ||
         permissions.includes('dndAccess') ||
@@ -32,6 +33,12 @@ const withPermissionKit = (config, props) => {
                 !existingPermissions.includes('android.permission.SYSTEM_ALERT_WINDOW')) {
                 androidManifest.manifest['uses-permission'].push({
                     $: { 'android:name': 'android.permission.SYSTEM_ALERT_WINDOW' },
+                });
+            }
+            if (permissions.includes('usageStats') &&
+                !existingPermissions.includes('android.permission.PACKAGE_USAGE_STATS')) {
+                androidManifest.manifest['uses-permission'].push({
+                    $: { 'android:name': 'android.permission.PACKAGE_USAGE_STATS' },
                 });
             }
             if (permissions.includes('exactAlarm') &&

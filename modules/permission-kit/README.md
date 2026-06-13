@@ -36,7 +36,7 @@ In your `app.json`, add the plugin and specify the permissions you want:
       [
         "@abrarmehraj/permission-kit",
         {
-          "permissions": ["batteryOptimization", "overlay", "exactAlarm", "fullScreenIntent", "dndAccess", "notifications", "location", "media"],
+          "permissions": ["batteryOptimization", "overlay", "usageStats", "exactAlarm", "fullScreenIntent", "dndAccess", "notifications", "location", "media"],
           "locationDescription": "Used to show your current position.",
           "photoDescription": "Used to pick a profile picture.",
           "appleMusicDescription": "Used to pick audio."
@@ -169,6 +169,28 @@ Check the current overlay status without opening settings.
 
 ```ts
 const result = await PermissionKit.checkOverlay();
+```
+
+---
+
+### `PermissionKit.usageStats()`
+
+Checks if the app is allowed to access app usage statistics (Usage Access). Required for app blockers or digital wellbeing features. If not, automatically opens the Android "Usage Access" settings, waits for the user to return, and re-checks on resume.
+
+```ts
+const result = await PermissionKit.usageStats();
+
+if (result.status === 'granted') {
+  // App is allowed to read usage stats
+}
+```
+
+### `PermissionKit.checkUsageStats()`
+
+Check the current usage access status without opening settings.
+
+```ts
+const result = await PermissionKit.checkUsageStats();
 ```
 
 ---
@@ -376,6 +398,7 @@ const result = await PermissionKit.checkLocation();
 |-----------------------|---------|-----|
 | Battery Optimization  | ✅      | ⚠️ `unavailable` |
 | Overlay Permission    | ✅      | ⚠️ `unavailable` |
+| Usage Access          | ✅      | ⚠️ `unavailable` |
 | Exact Alarm           | ✅      | ⚠️ `unavailable` |
 | Full Screen Intent    | ✅      | ⚠️ `unavailable` |
 | Accessibility Service | ✅      | ⚠️ `unavailable` |
@@ -384,7 +407,7 @@ const result = await PermissionKit.checkLocation();
 | Location              | ✅      | ✅ |
 | Media                 | ✅      | ✅ |
 
-> **iOS Note**: Battery Optimization, Overlay, Exact Alarm, Full Screen Intent, Accessibility Service, and DND Access are Android-only concepts. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI. Notifications, Location, and Media are natively supported on both platforms.
+> **iOS Note**: Battery Optimization, Overlay, Usage Access, Exact Alarm, Full Screen Intent, Accessibility Service, and DND Access are Android-only concepts. Calling them on iOS immediately returns `{ status: 'unavailable' }` without showing any UI. Notifications, Location, and Media are natively supported on both platforms.
 
 > **Simulator Note**: When testing on the iOS Simulator, calling `openSettings()` or pressing the "Open Settings" button in the permission alert may open the Settings App's home screen instead of the specific app's settings page. This is a known iOS Simulator bug. Testing on a real physical device will correctly open the specific app's settings.
 
@@ -402,7 +425,7 @@ const result = await PermissionKit.checkLocation();
 - [x] Location (Android + iOS)
 - [x] Media (Android + iOS)
 - [x] Expo Config Plugin
-- [ ] Usage Access (Android)
+- [x] Usage Access (Android)
 - [ ] Write System Settings (Android)
 - [ ] `ensure()` helper
 

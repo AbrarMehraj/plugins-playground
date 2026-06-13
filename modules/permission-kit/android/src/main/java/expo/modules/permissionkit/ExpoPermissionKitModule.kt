@@ -196,6 +196,38 @@ class ExpoPermissionKitModule : Module() {
       }
     }
 
+    AsyncFunction("isUsageStatsPermissionEnabled") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      val appOpsManager = context.getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+      val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        appOpsManager.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+      } else {
+        @Suppress("DEPRECATION")
+        appOpsManager.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+      }
+      return@AsyncFunction mode == android.app.AppOpsManager.MODE_ALLOWED
+    }
+
+    AsyncFunction("openUsageStatsSettings") {
+      val context = appContext.reactContext
+        ?: throw Exception("Context unavailable")
+
+      val packageName = context.packageName
+
+      if (!hasManifestPermission(android.Manifest.permission.PACKAGE_USAGE_STATS)) {
+        throw Exception("MISSING_PERMISSION: Add 'usageStats' to your app.json plugin")
+      }
+
+      val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          intent.data = Uri.parse("package:$packageName")
+      }
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      context.startActivity(intent)
+    }
+
     AsyncFunction("isExactAlarmPermissionEnabled") {
       val context = appContext.reactContext
         ?: throw Exception("Context unavailable")

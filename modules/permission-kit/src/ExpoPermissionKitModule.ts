@@ -5,6 +5,8 @@ export interface PermissionKitNativeModule {
   openBatteryOptimizationSettings(): Promise<void>;
   isOverlayPermissionEnabled(): Promise<boolean>;
   openOverlayPermissionSettings(): Promise<void>;
+  isUsageStatsPermissionEnabled(): Promise<boolean>;
+  openUsageStatsSettings(): Promise<void>;
   isExactAlarmPermissionEnabled(): Promise<boolean>;
   openExactAlarmSettings(): Promise<void>;
   isFullScreenIntentPermissionEnabled(): Promise<boolean>;

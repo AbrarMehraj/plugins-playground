@@ -107,6 +107,44 @@ export async function overlay() {
   return await checkOverlay();
 }
 
+export async function checkUsageStats() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+  const enabled = await NativeModule.isUsageStatsPermissionEnabled();
+  return {
+    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
+  };
+}
+
+export async function usageStats() {
+  if (Platform.OS === 'ios' || !NativeModule) {
+    return { status: 'unavailable' as const };
+  }
+
+  const check = await checkUsageStats();
+
+  if (check.status === 'granted') {
+    return check;
+  }
+
+  try {
+    await NativeModule.openUsageStatsSettings();
+  } catch (error: any) {
+    if (error?.message?.includes('MISSING_PERMISSION')) {
+      console.warn(
+        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'usageStats' to your app.json plugin."
+      );
+      return { status: 'denied' as const };
+    }
+    throw error;
+  }
+
+  await waitForResume();
+
+  return await checkUsageStats();
+}
+
 export async function checkExactAlarm() {
   if (Platform.OS === 'ios' || !NativeModule) {
     return { status: 'unavailable' as const };
@@ -481,6 +519,8 @@ export const PermissionKit = {
   checkBatteryOptimization,
   overlay,
   checkOverlay,
+  usageStats,
+  checkUsageStats,
   exactAlarm,
   checkExactAlarm,
   fullScreenIntent,
