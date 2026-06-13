@@ -42,13 +42,26 @@ import expo.modules.kotlin.modules.ModuleDefinition
 
 class ExpoPermissionKitModule : Module() {
 
+  private val safeContext: android.content.Context
+    get() = appContext.reactContext ?: throw Exception("Context unavailable")
+
+  private fun openSettingsIntent(action: String, addPackageData: Boolean = true, extraConfig: (Intent) -> Unit = {}) {
+    val intent = Intent(action).apply {
+      if (addPackageData) {
+        data = Uri.parse("package:${safeContext.packageName}")
+      }
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      extraConfig(this)
+    }
+    safeContext.startActivity(intent)
+  }
+
   private var pendingLocationPromise: expo.modules.kotlin.Promise? = null
   private var pendingLocationTimeoutMs: Int = 10000
   private var pendingLocationAccuracy: String = "balanced"
   private val LOCATION_SETTINGS_REQUEST_CODE = 9991
 
   private fun fetchCoordinates(timeoutMs: Int, accuracy: String, promise: expo.modules.kotlin.Promise) {
-    val context = appContext.reactContext ?: return
     var settled = false
     val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
@@ -68,7 +81,7 @@ class ExpoPermissionKitModule : Module() {
     }
 
     try {
-      val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+      val fusedLocationClient = LocationServices.getFusedLocationProviderClient(safeContext)
       fusedLocationClient.getCurrentLocation(priority, null)
         .addOnSuccessListener { location: Location? ->
           if (settled) return@addOnSuccessListener
@@ -100,9 +113,8 @@ class ExpoPermissionKitModule : Module() {
     }
   }
   private fun hasManifestPermission(permission: String): Boolean {
-    val context = appContext.reactContext ?: return false
     return try {
-      val packageInfo = context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_PERMISSIONS)
+      val packageInfo = safeContext.packageManager.getPackageInfo(safeContext.packageName, android.content.pm.PackageManager.GET_PERMISSIONS)
       packageInfo.requestedPermissions?.contains(permission) == true
     } catch (e: Exception) {
       false
@@ -129,179 +141,94 @@ class ExpoPermissionKitModule : Module() {
     }
 
     AsyncFunction("isBatteryOptimizationEnabled") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
-      val powerManager =
-        context.getSystemService(android.content.Context.POWER_SERVICE)
-          as PowerManager
-
-      val packageName = context.packageName
-
-      val ignoring =
-        powerManager.isIgnoringBatteryOptimizations(packageName)
-
-      return@AsyncFunction ignoring
+      val powerManager = safeContext.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
+      return@AsyncFunction powerManager.isIgnoringBatteryOptimizations(safeContext.packageName)
     }
 
     AsyncFunction("openBatteryOptimizationSettings") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
-      val packageName = context.packageName
-
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         if (!hasManifestPermission(android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)) {
           throw Exception("MISSING_PERMISSION: Add batteryOptimization to your app.json plugin")
         }
-
-        val intent = Intent(
-          Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-          Uri.parse("package:$packageName")
-        )
-
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        openSettingsIntent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
       }
     }
 
     AsyncFunction("isOverlayPermissionEnabled") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        return@AsyncFunction Settings.canDrawOverlays(context)
+        return@AsyncFunction Settings.canDrawOverlays(safeContext)
       }
       return@AsyncFunction true
     }
 
     AsyncFunction("openOverlayPermissionSettings") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
-      val packageName = context.packageName
-
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         if (!hasManifestPermission(android.Manifest.permission.SYSTEM_ALERT_WINDOW)) {
           throw Exception("MISSING_PERMISSION: Add 'overlay' to your app.json plugin")
         }
-
-        val intent = Intent(
-          Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-          Uri.parse("package:$packageName")
-        )
-
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        openSettingsIntent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
       }
     }
 
     AsyncFunction("isUsageStatsPermissionEnabled") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
-      val appOpsManager = context.getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+      val appOpsManager = safeContext.getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
       val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        appOpsManager.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+        appOpsManager.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), safeContext.packageName)
       } else {
         @Suppress("DEPRECATION")
-        appOpsManager.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+        appOpsManager.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), safeContext.packageName)
       }
       return@AsyncFunction mode == android.app.AppOpsManager.MODE_ALLOWED
     }
 
     AsyncFunction("openUsageStatsSettings") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
-      val packageName = context.packageName
-
       if (!hasManifestPermission(android.Manifest.permission.PACKAGE_USAGE_STATS)) {
         throw Exception("MISSING_PERMISSION: Add 'usageStats' to your app.json plugin")
       }
-
-      val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-          intent.data = Uri.parse("package:$packageName")
-      }
-      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      context.startActivity(intent)
+      openSettingsIntent(Settings.ACTION_USAGE_ACCESS_SETTINGS, addPackageData = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
     }
 
     AsyncFunction("isExactAlarmPermissionEnabled") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+        val alarmManager = safeContext.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
         return@AsyncFunction alarmManager.canScheduleExactAlarms()
       }
       return@AsyncFunction true
     }
 
     AsyncFunction("openExactAlarmSettings") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
-      val packageName = context.packageName
-
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         if (!hasManifestPermission(android.Manifest.permission.SCHEDULE_EXACT_ALARM)) {
           throw Exception("MISSING_PERMISSION: Add 'exactAlarm' to your app.json plugin")
         }
-
-        val intent = Intent(
-          Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-          Uri.parse("package:$packageName")
-        )
-
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        openSettingsIntent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
       }
     }
 
     AsyncFunction("isFullScreenIntentPermissionEnabled") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val notificationManager = safeContext.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         return@AsyncFunction notificationManager.canUseFullScreenIntent()
       }
       return@AsyncFunction true
     }
 
     AsyncFunction("openFullScreenIntentSettings") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
-      val packageName = context.packageName
-
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         if (!hasManifestPermission(android.Manifest.permission.USE_FULL_SCREEN_INTENT)) {
           throw Exception("MISSING_PERMISSION: Add 'fullScreenIntent' to your app.json plugin")
         }
-
-        val intent = Intent(
-          Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
-          Uri.parse("package:$packageName")
-        )
-
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        openSettingsIntent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
       }
     }
 
     AsyncFunction("isAccessibilityPermissionEnabled") { serviceName: String ->
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
       val enabledServicesSetting = Settings.Secure.getString(
-        context.contentResolver,
+        safeContext.contentResolver,
         Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
       ) ?: return@AsyncFunction false
 
-      val pkg = context.packageName
+      val pkg = safeContext.packageName
       val cls = if (serviceName.startsWith(".")) pkg + serviceName else serviceName
       val myServiceComponent = android.content.ComponentName(pkg, cls)
       
@@ -319,43 +246,28 @@ class ExpoPermissionKitModule : Module() {
     }
 
     AsyncFunction("openAccessibilitySettings") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
-      val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      context.startActivity(intent)
+      openSettingsIntent(Settings.ACTION_ACCESSIBILITY_SETTINGS, addPackageData = false)
     }
 
     AsyncFunction("isDndAccessPermissionEnabled") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val notificationManager = safeContext.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         return@AsyncFunction notificationManager.isNotificationPolicyAccessGranted
       }
       return@AsyncFunction true
     }
 
     AsyncFunction("openDndAccessSettings") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         if (!hasManifestPermission(android.Manifest.permission.ACCESS_NOTIFICATION_POLICY)) {
           throw Exception("MISSING_PERMISSION: Add 'dndAccess' to your app.json plugin")
         }
-
-        val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        openSettingsIntent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS, addPackageData = false)
       }
     }
 
     AsyncFunction("checkNotificationsStatus") { promise: expo.modules.kotlin.Promise ->
-      val context = appContext.reactContext ?: throw Exception("Context unavailable")
-      val notificationManager = androidx.core.app.NotificationManagerCompat.from(context)
+      val notificationManager = androidx.core.app.NotificationManagerCompat.from(safeContext)
       val granted = notificationManager.areNotificationsEnabled()
 
       if (Build.VERSION.SDK_INT >= 33) {
@@ -378,7 +290,6 @@ class ExpoPermissionKitModule : Module() {
     }
 
     AsyncFunction("requestNotifications") { promise: expo.modules.kotlin.Promise ->
-      val context = appContext.reactContext ?: throw Exception("Context unavailable")
 
       if (Build.VERSION.SDK_INT >= 33) { // Build.VERSION_CODES.TIRAMISU
         val permissionsManager = appContext.permissions
@@ -399,28 +310,24 @@ class ExpoPermissionKitModule : Module() {
           android.Manifest.permission.POST_NOTIFICATIONS
         )
       } else {
-        val notificationManager = androidx.core.app.NotificationManagerCompat.from(context)
+        val notificationManager = androidx.core.app.NotificationManagerCompat.from(safeContext)
         val granted = notificationManager.areNotificationsEnabled()
         promise.resolve(mapOf("granted" to granted, "canAskAgain" to !granted))
       }
     }
 
     AsyncFunction("openNotificationSettings") {
-      val context = appContext.reactContext
-        ?: throw Exception("Context unavailable")
-
       val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        putExtra(Settings.EXTRA_APP_PACKAGE, safeContext.packageName)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
-      context.startActivity(intent)
+      safeContext.startActivity(intent)
     }
 
     // ── Location ────────────────────────────────────────────────────────────────
 
     AsyncFunction("checkLocationStatus") { promise: expo.modules.kotlin.Promise ->
-      val context = appContext.reactContext ?: throw Exception("Context unavailable")
-      val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+      val locationManager = safeContext.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
       val servicesEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         locationManager.isLocationEnabled
       } else {
@@ -459,7 +366,6 @@ class ExpoPermissionKitModule : Module() {
     }
 
         AsyncFunction("requestLocation") { timeoutMs: Int, accuracy: String, promise: expo.modules.kotlin.Promise ->
-      val context = appContext.reactContext ?: throw Exception("Context unavailable")
       
       // 1. Request runtime permission first
       val permissionsManager = appContext.permissions
@@ -482,7 +388,7 @@ class ExpoPermissionKitModule : Module() {
           }
 
           // 2. Permission granted — check if Location Services are enabled
-          val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+          val locationManager = safeContext.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
           val servicesEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             locationManager.isLocationEnabled
           } else {
@@ -497,7 +403,7 @@ class ExpoPermissionKitModule : Module() {
             // 3. Location disabled — use Google Play Services to prompt the user
             val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000).build()
             val builder = LocationSettingsRequest.Builder().addLocationRequest(locationRequest)
-            val client = LocationServices.getSettingsClient(context)
+            val client = LocationServices.getSettingsClient(safeContext)
             
             client.checkLocationSettings(builder.build())
               .addOnSuccessListener {
@@ -560,10 +466,6 @@ class ExpoPermissionKitModule : Module() {
     }
 
     AsyncFunction("showPermissionAlertAndOpenSettings") { title: String, description: String, settingsType: String, promise: expo.modules.kotlin.Promise ->
-      val context = appContext.reactContext ?: run {
-        promise.resolve(null)
-        return@AsyncFunction
-      }
       val activity = appContext.activityProvider?.currentActivity ?: run {
         promise.resolve(null)
         return@AsyncFunction
@@ -618,15 +520,15 @@ class ExpoPermissionKitModule : Module() {
                       onClick = {
                         val intent = if (settingsType == "notifications" && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                           Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, safeContext.packageName)
                           }
                         } else {
                           Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                            data = android.net.Uri.fromParts("package", context.packageName, null)
+                            data = android.net.Uri.fromParts("package", safeContext.packageName, null)
                           }
                         }
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
+                        safeContext.startActivity(intent)
                         dialog.dismiss()
                       }
                     ) {
@@ -655,31 +557,19 @@ class ExpoPermissionKitModule : Module() {
 
     AsyncFunction("openLocationSettings") {
       // System-level Location Services toggle (for when GPS is OFF globally)
-      val context = appContext.reactContext ?: throw Exception("Context unavailable")
-      val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      }
-      context.startActivity(intent)
+      openSettingsIntent(Settings.ACTION_LOCATION_SOURCE_SETTINGS, addPackageData = false)
     }
 
     AsyncFunction("openAppLocationSettings") {
       // App-specific Location permission (for when our app was permanently denied)
-      val context = appContext.reactContext ?: throw Exception("Context unavailable")
-      val intent = Intent(
-        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-        Uri.parse("package:${context.packageName}")
-      ).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      }
-      context.startActivity(intent)
+      openSettingsIntent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
     }
 
     // ── Media ───────────────────────────────────────────────────────────────────
 
     AsyncFunction("checkMediaStatus") { type: String, promise: expo.modules.kotlin.Promise ->
       val permissionsManager = appContext.permissions
-      val context = appContext.reactContext
-      if (context == null || permissionsManager == null) {
+      if (permissionsManager == null) {
         promise.resolve(mapOf("status" to "unavailable"))
         return@AsyncFunction
       }
@@ -722,8 +612,7 @@ class ExpoPermissionKitModule : Module() {
 
     AsyncFunction("requestMedia") { type: String, promise: expo.modules.kotlin.Promise ->
       val permissionsManager = appContext.permissions
-      val context = appContext.reactContext
-      if (context == null || permissionsManager == null) {
+      if (permissionsManager == null) {
         promise.resolve(mapOf("status" to "unavailable"))
         return@AsyncFunction
       }
@@ -749,32 +638,14 @@ class ExpoPermissionKitModule : Module() {
     }
 
     AsyncFunction("openMediaSettings") {
-      val context = appContext.reactContext ?: throw Exception("Context unavailable")
-      val intent = Intent(
-        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-        Uri.parse("package:${context.packageName}")
-      ).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      }
-      context.startActivity(intent)
+      openSettingsIntent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
     }
 
     AsyncFunction("openAllFilesSettings") {
-      val context = appContext.reactContext ?: throw Exception("Context unavailable")
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-          data = Uri.parse("package:${context.packageName}")
-          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
+        openSettingsIntent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
       } else {
-        val intent = Intent(
-          Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-          Uri.parse("package:${context.packageName}")
-        ).apply {
-          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
+        openSettingsIntent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
       }
     }
   }
