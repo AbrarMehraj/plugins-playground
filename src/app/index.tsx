@@ -47,6 +47,11 @@ export default function HomeScreen() {
       action: () => PermissionKit.overlay(),
     },
     {
+      label: 'Usage Access',
+      sublabel: 'App usage statistics',
+      action: () => PermissionKit.usageStats(),
+    },
+    {
       label: 'Exact Alarm',
       sublabel: 'Schedule precise alarms',
       action: () => PermissionKit.exactAlarm(),

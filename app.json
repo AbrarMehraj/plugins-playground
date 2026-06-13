@@ -43,6 +43,7 @@
           "permissions": [
             "batteryOptimization",
             "overlay",
+            "usageStats",
             "exactAlarm",
             "fullScreenIntent",
             "dndAccess",
