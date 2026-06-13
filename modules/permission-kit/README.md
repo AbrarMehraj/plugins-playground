@@ -36,7 +36,7 @@ In your `app.json`, add the plugin and specify the permissions you want:
       [
         "@abrarmehraj/permission-kit",
         {
-          "permissions": ["batteryOptimization", "overlay", "usageStats", "exactAlarm", "fullScreenIntent", "dndAccess", "notifications", "location", "media"],
+          "permissions": ["batteryOptimization", "overlay", "usageStats", "exactAlarm", "fullScreenIntent", "dndAccess", "notifications", "location", "media:photo", "media:video"],
           "locationDescription": "Used to show your current position.",
           "photoDescription": "Used to pick a profile picture.",
           "appleMusicDescription": "Used to pick audio."
@@ -48,6 +48,27 @@ In your `app.json`, add the plugin and specify the permissions you want:
 ```
 
 - **`permissions`**: Array of permissions you intend to use. Only the required ones will be injected into AndroidManifest.xml.
+
+  **Available permission keys:**
+  | Key | What it does |
+  |---|---|
+  | `batteryOptimization` | Exempt from battery optimization |
+  | `overlay` | Draw over other apps |
+  | `usageStats` | App usage statistics |
+  | `exactAlarm` | Schedule exact alarms (user-revocable, for general apps) |
+  | `useExactAlarm` | Auto-granted exact alarms (for alarm clock / timer apps only — requires Play Store justification) |
+  | `fullScreenIntent` | Full screen intents |
+  | `dndAccess` | Do Not Disturb access |
+  | `notifications` | Push & local notifications |
+  | `location` | Fine + coarse location |
+  | `media` | **All** media permissions (photos, video, audio, all-files) — backward compatible |
+  | `media:photo` | Only photo library access |
+  | `media:video` | Only video library access |
+  | `media:audio` | Only music/audio library access |
+  | `media:all` | Full file manager access (`MANAGE_EXTERNAL_STORAGE`) |
+
+  > **Tip:** Use granular `media:photo`, `media:video`, etc. instead of bare `media` to avoid declaring unnecessary permissions in your manifest. This helps with Play Store reviews.
+
 - **`locationDescription`**: (Optional) For iOS, this string is used as the `NSLocationWhenInUseUsageDescription`. Defaults to `"$(PRODUCT_NAME) needs access to your location."`
 - **`photoDescription`**: (Optional) For iOS, this string is used as the `NSPhotoLibraryUsageDescription`. Defaults to `"$(PRODUCT_NAME) needs access to your photos."`
 - **`appleMusicDescription`**: (Optional) For iOS, this string is used as the `NSAppleMusicUsageDescription`. Defaults to `"$(PRODUCT_NAME) needs access to your music."`
@@ -67,6 +88,9 @@ Add the required permissions to your `android/app/src/main/AndroidManifest.xml` 
 <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+<!-- OR, if you are building an alarm clock app: -->
+<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
 <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -197,7 +221,10 @@ const result = await PermissionKit.checkUsageStats();
 
 ### `PermissionKit.exactAlarm()`
 
-Checks if the app is allowed to schedule exact alarms (Android 14+ requirement). If not, automatically opens the Android "Alarms & Reminders" settings, waits for the user to return, and re-checks on resume.
+Checks if the app is allowed to schedule exact alarms (Android 14+ requirement). 
+
+- If you configured `"exactAlarm"` in your setup: Automatically opens the Android "Alarms & Reminders" settings, waits for the user to toggle it on, and re-checks on resume.
+- If you configured `"useExactAlarm"` in your setup: This will instantly return `{ status: 'granted' }` without opening any settings, since it is auto-granted by Android.
 
 ```ts
 const result = await PermissionKit.exactAlarm();

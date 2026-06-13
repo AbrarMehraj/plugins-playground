@@ -2,7 +2,74 @@ import { Alert, AppState, Platform, ToastAndroid } from 'react-native';
 import NativeModule from './ExpoPermissionKitModule';
 import { MediaOptions, MediaResult } from './types';
 
-// Fallback native message (Toast for Android, Alert for iOS)
+// ─── Shared Types ──────────────────────────────────────────────────────────────
+
+type AndroidSettingsResult = { status: 'granted' | 'denied' | 'unavailable' };
+
+export interface AccessibilityOptions {
+  androidServicePath: string;
+}
+
+export interface AlertConfig {
+  title: string;
+  description: string;
+}
+
+export interface NotificationOptions {
+  /** If true, shows a native alert dialog when permission is permanently denied. */
+  showAlertConfig?: boolean;
+  /** Optional text for the native alert dialog. Uses defaults if not provided. */
+  alertConfig?: AlertConfig;
+}
+
+export type LocationPermissionStatus =
+  | { status: 'granted' }
+  | { status: 'denied'; canAskAgain: boolean; error?: 'LOCATION_SERVICES_DISABLED' }
+  | { status: 'restricted' }
+  | { status: 'unavailable' };
+
+export type LocationResult =
+  | { status: 'granted'; latitude: number; longitude: number; accuracy: number; altitude: number; timestamp: number }
+  | { status: 'granted'; error: 'TIMEOUT' | 'LOCATION_UNAVAILABLE' }
+  | { status: 'denied'; canAskAgain?: boolean; error?: 'LOCATION_SERVICES_DISABLED' }
+  | { status: 'restricted' }
+  | { status: 'unavailable' };
+
+export type LocationAccuracy = 'high' | 'balanced' | 'low';
+
+export interface LocationOptions {
+  /** GPS timeout in milliseconds. Default: 10000ms */
+  timeout?: number;
+  /**
+   * Location accuracy level. Default: 'balanced'.
+   * - 'high': GPS-level precision (~5m). Slower, uses more battery.
+   * - 'balanced': Wi-Fi/Cell tower precision (~100m). Fast, battery-friendly.
+   * - 'low': City-level precision (~1km). Fastest, minimal battery.
+   */
+  accuracy?: LocationAccuracy;
+  /**
+   * If false, only requests the permission without fetching GPS coordinates.
+   * Resolves with { status: 'granted' } immediately after permission is granted.
+   * Default: true
+   */
+  fetchCoordinates?: boolean;
+  /** If true, shows a native alert dialog when permission is permanently denied. */
+  showAlertConfig?: boolean;
+  /** Optional text for the native alert dialog. Uses defaults if not provided. */
+  alertConfig?: AlertConfig;
+  /** If true, automatically shows native UI messages (Toast on Android, Alert on iOS) for common location errors like timeout or services disabled. Default: true */
+  showErrorAlerts?: boolean;
+  /** Custom messages to display when showErrorAlerts is true. */
+  errorMessages?: {
+    servicesDisabled?: string;
+    timeout?: string;
+    unavailable?: string;
+  };
+}
+
+// ─── Internal Helpers ──────────────────────────────────────────────────────────
+
+/** Fallback native message (Toast for Android, Alert for iOS) */
 const showNativeMessage = (message: string) => {
   if (Platform.OS === 'android') {
     ToastAndroid.show(message, ToastAndroid.LONG);
@@ -11,56 +78,17 @@ const showNativeMessage = (message: string) => {
   }
 };
 
-export async function checkBatteryOptimization() {
-  if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
-  }
-  const enabled = await NativeModule.isBatteryOptimizationEnabled();
-  return {
-    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
-  };
-}
-
-export async function batteryOptimization() {
-  if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
-  }
-
-  const check = await checkBatteryOptimization();
-
-  if (check.status === 'granted') {
-    return check;
-  }
-
-  try {
-    await NativeModule.openBatteryOptimizationSettings();
-  } catch (error: any) {
-    if (error?.message?.includes('MISSING_PERMISSION')) {
-      console.warn(
-        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'batteryOptimization' to your app.json plugin."
-      );
-      return { status: 'denied' as const };
-    }
-    throw error;
-  }
-
-  await waitForResume();
-
-  return await checkBatteryOptimization();
-}
-
+/** Wait for the app to resume from background (e.g. after opening Settings). */
 function waitForResume(): Promise<void> {
   return new Promise(resolve => {
     let wentToBackground = false;
 
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'background' || state === 'inactive') {
-        // App left foreground (went to Settings or permission dialog dismissed)
         wentToBackground = true;
       }
 
       if (state === 'active' && wentToBackground) {
-        // App came back from background/settings — this is a genuine resume
         sub.remove();
         // Short delay to allow the OS to propagate permission changes
         setTimeout(resolve, 400);
@@ -69,161 +97,91 @@ function waitForResume(): Promise<void> {
   });
 }
 
-export async function checkOverlay() {
+/**
+ * Generic check for any Android settings-based permission.
+ * Returns 'unavailable' on iOS, 'granted'/'denied' based on the native check.
+ */
+async function checkAndroidSettingsPermission(
+  checkFn: () => Promise<boolean>,
+): Promise<AndroidSettingsResult> {
   if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
+    return { status: 'unavailable' };
   }
-  const enabled = await NativeModule.isOverlayPermissionEnabled();
-  return {
-    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
-  };
+  const enabled = await checkFn();
+  return { status: enabled ? 'granted' : 'denied' };
 }
 
-export async function overlay() {
+/**
+ * Generic request for any Android settings-based permission.
+ * Handles: check → open settings → catch MISSING_PERMISSION → waitForResume → re-check.
+ */
+async function requestAndroidSettingsPermission(
+  pluginName: string,
+  checkFn: () => Promise<AndroidSettingsResult>,
+  openSettingsFn: () => Promise<void>,
+): Promise<AndroidSettingsResult> {
   if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
+    return { status: 'unavailable' };
   }
 
-  const check = await checkOverlay();
-
-  if (check.status === 'granted') {
-    return check;
-  }
+  const check = await checkFn();
+  if (check.status === 'granted') return check;
 
   try {
-    await NativeModule.openOverlayPermissionSettings();
+    await openSettingsFn();
   } catch (error: any) {
     if (error?.message?.includes('MISSING_PERMISSION')) {
       console.warn(
-        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'overlay' to your app.json plugin."
+        `[@abrarmehraj/permission-kit] Missing Permission: You forgot to add '${pluginName}' to your app.json plugin.`
       );
-      return { status: 'denied' as const };
+      return { status: 'denied' };
     }
     throw error;
   }
 
   await waitForResume();
-
-  return await checkOverlay();
+  return await checkFn();
 }
 
-export async function checkUsageStats() {
-  if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
-  }
-  const enabled = await NativeModule.isUsageStatsPermissionEnabled();
-  return {
-    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
-  };
-}
+// ─── Android Settings-Based Permissions (DRY) ─────────────────────────────────
 
-export async function usageStats() {
-  if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
-  }
+export const checkBatteryOptimization = () =>
+  checkAndroidSettingsPermission(() => NativeModule!.isBatteryOptimizationEnabled());
 
-  const check = await checkUsageStats();
+export const batteryOptimization = () =>
+  requestAndroidSettingsPermission('batteryOptimization', checkBatteryOptimization, () => NativeModule!.openBatteryOptimizationSettings());
 
-  if (check.status === 'granted') {
-    return check;
-  }
+export const checkOverlay = () =>
+  checkAndroidSettingsPermission(() => NativeModule!.isOverlayPermissionEnabled());
 
-  try {
-    await NativeModule.openUsageStatsSettings();
-  } catch (error: any) {
-    if (error?.message?.includes('MISSING_PERMISSION')) {
-      console.warn(
-        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'usageStats' to your app.json plugin."
-      );
-      return { status: 'denied' as const };
-    }
-    throw error;
-  }
+export const overlay = () =>
+  requestAndroidSettingsPermission('overlay', checkOverlay, () => NativeModule!.openOverlayPermissionSettings());
 
-  await waitForResume();
+export const checkUsageStats = () =>
+  checkAndroidSettingsPermission(() => NativeModule!.isUsageStatsPermissionEnabled());
 
-  return await checkUsageStats();
-}
+export const usageStats = () =>
+  requestAndroidSettingsPermission('usageStats', checkUsageStats, () => NativeModule!.openUsageStatsSettings());
 
-export async function checkExactAlarm() {
-  if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
-  }
-  const enabled = await NativeModule.isExactAlarmPermissionEnabled();
-  return {
-    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
-  };
-}
+export const checkExactAlarm = () =>
+  checkAndroidSettingsPermission(() => NativeModule!.isExactAlarmPermissionEnabled());
 
-export async function exactAlarm() {
-  if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
-  }
+export const exactAlarm = () =>
+  requestAndroidSettingsPermission('exactAlarm', checkExactAlarm, () => NativeModule!.openExactAlarmSettings());
 
-  const check = await checkExactAlarm();
+export const checkFullScreenIntent = () =>
+  checkAndroidSettingsPermission(() => NativeModule!.isFullScreenIntentPermissionEnabled());
 
-  if (check.status === 'granted') {
-    return check;
-  }
+export const fullScreenIntent = () =>
+  requestAndroidSettingsPermission('fullScreenIntent', checkFullScreenIntent, () => NativeModule!.openFullScreenIntentSettings());
 
-  try {
-    await NativeModule.openExactAlarmSettings();
-  } catch (error: any) {
-    if (error?.message?.includes('MISSING_PERMISSION')) {
-      console.warn(
-        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'exactAlarm' to your app.json plugin."
-      );
-      return { status: 'denied' as const };
-    }
-    throw error;
-  }
+export const checkDndAccess = () =>
+  checkAndroidSettingsPermission(() => NativeModule!.isDndAccessPermissionEnabled());
 
-  await waitForResume();
+export const dndAccess = () =>
+  requestAndroidSettingsPermission('dndAccess', checkDndAccess, () => NativeModule!.openDndAccessSettings());
 
-  return await checkExactAlarm();
-}
-
-export async function checkFullScreenIntent() {
-  if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
-  }
-  const enabled = await NativeModule.isFullScreenIntentPermissionEnabled();
-  return {
-    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
-  };
-}
-
-export async function fullScreenIntent() {
-  if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
-  }
-
-  const check = await checkFullScreenIntent();
-
-  if (check.status === 'granted') {
-    return check;
-  }
-
-  try {
-    await NativeModule.openFullScreenIntentSettings();
-  } catch (error: any) {
-    if (error?.message?.includes('MISSING_PERMISSION')) {
-      console.warn(
-        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'fullScreenIntent' to your app.json plugin."
-      );
-      return { status: 'denied' as const };
-    }
-    throw error;
-  }
-
-  await waitForResume();
-
-  return await checkFullScreenIntent();
-}
-
-export interface AccessibilityOptions {
-  androidServicePath: string;
-}
+// ─── Accessibility (slightly different — takes runtime options, no MISSING_PERMISSION check) ───
 
 export async function checkAccessibility(options: AccessibilityOptions) {
   if (Platform.OS === 'ios' || !NativeModule) {
@@ -241,10 +199,7 @@ export async function accessibility(options: AccessibilityOptions) {
   }
 
   const check = await checkAccessibility(options);
-
-  if (check.status === 'granted') {
-    return check;
-  }
+  if (check.status === 'granted') return check;
 
   await NativeModule.openAccessibilitySettings();
   await waitForResume();
@@ -252,43 +207,7 @@ export async function accessibility(options: AccessibilityOptions) {
   return await checkAccessibility(options);
 }
 
-export async function checkDndAccess() {
-  if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
-  }
-  const enabled = await NativeModule.isDndAccessPermissionEnabled();
-  return {
-    status: (enabled ? 'granted' : 'denied') as 'granted' | 'denied',
-  };
-}
-
-export async function dndAccess() {
-  if (Platform.OS === 'ios' || !NativeModule) {
-    return { status: 'unavailable' as const };
-  }
-
-  const check = await checkDndAccess();
-
-  if (check.status === 'granted') {
-    return check;
-  }
-
-  try {
-    await NativeModule.openDndAccessSettings();
-  } catch (error: any) {
-    if (error?.message?.includes('MISSING_PERMISSION')) {
-      console.warn(
-        "[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'dndAccess' to your app.json plugin."
-      );
-      return { status: 'denied' as const };
-    }
-    throw error;
-  }
-
-  await waitForResume();
-
-  return await checkDndAccess();
-}
+// ─── Notifications (cross-platform, runtime dialog, canAskAgain logic) ─────
 
 export async function checkNotifications() {
   if (!NativeModule) {
@@ -299,13 +218,6 @@ export async function checkNotifications() {
     status: (result.granted ? 'granted' : 'denied') as 'granted' | 'denied',
     canAskAgain: result.canAskAgain,
   };
-}
-
-export interface NotificationOptions {
-  /** If true, shows a native alert dialog when permission is permanently denied. */
-  showAlertConfig?: boolean;
-  /** Optional text for the native alert dialog. Uses defaults if not provided. */
-  alertConfig?: AlertConfig;
 }
 
 export async function notifications(opts?: NotificationOptions) {
@@ -339,23 +251,7 @@ export async function notifications(opts?: NotificationOptions) {
   return { status: 'denied' as const, canAskAgain: false };
 }
 
-export type LocationPermissionStatus =
-  | { status: 'granted' }
-  | { status: 'denied'; canAskAgain: boolean; error?: 'LOCATION_SERVICES_DISABLED' }
-  | { status: 'restricted' }
-  | { status: 'unavailable' };
-
-export type LocationResult =
-  | { status: 'granted'; latitude: number; longitude: number; accuracy: number; altitude: number; timestamp: number }
-  | { status: 'granted'; error: 'TIMEOUT' | 'LOCATION_UNAVAILABLE' }
-  | { status: 'denied'; canAskAgain?: boolean; error?: 'LOCATION_SERVICES_DISABLED' }
-  | { status: 'restricted' }
-  | { status: 'unavailable' };
-
-export interface AlertConfig {
-  title: string;
-  description: string;
-}
+// ─── Location (cross-platform, GPS fetch, services check, error alerts) ────
 
 /**
  * Read-only permission status check. No prompts, no GPS hardware.
@@ -378,38 +274,6 @@ export async function checkLocation(): Promise<LocationPermissionStatus> {
     status: 'denied',
     canAskAgain: s.canAskAgain,
     ...(s.servicesEnabled === false ? { error: 'LOCATION_SERVICES_DISABLED' as const } : {}),
-  };
-}
-
-export type LocationAccuracy = 'high' | 'balanced' | 'low';
-
-export interface LocationOptions {
-  /** GPS timeout in milliseconds. Default: 10000ms */
-  timeout?: number;
-  /**
-   * Location accuracy level. Default: 'balanced'.
-   * - 'high': GPS-level precision (~5m). Slower, uses more battery.
-   * - 'balanced': Wi-Fi/Cell tower precision (~100m). Fast, battery-friendly.
-   * - 'low': City-level precision (~1km). Fastest, minimal battery.
-   */
-  accuracy?: LocationAccuracy;
-  /**
-   * If false, only requests the permission without fetching GPS coordinates.
-   * Resolves with { status: 'granted' } immediately after permission is granted.
-   * Default: true
-   */
-  fetchCoordinates?: boolean;
-  /** If true, shows a native alert dialog when permission is permanently denied. */
-  showAlertConfig?: boolean;
-  /** Optional text for the native alert dialog. Uses defaults if not provided. */
-  alertConfig?: AlertConfig;
-  /** If true, automatically shows native UI messages (Toast on Android, Alert on iOS) for common location errors like timeout or services disabled. Default: true */
-  showErrorAlerts?: boolean;
-  /** Custom messages to display when showErrorAlerts is true. */
-  errorMessages?: {
-    servicesDisabled?: string;
-    timeout?: string;
-    unavailable?: string;
   };
 }
 
@@ -462,6 +326,8 @@ export async function location(opts?: LocationOptions): Promise<LocationResult> 
   return result as LocationResult;
 }
 
+// ─── Media (cross-platform, fragmentation handling, limited picker) ────────
+
 export async function checkMedia(opts: MediaOptions): Promise<MediaResult> {
   if (!NativeModule) return { status: 'unavailable' };
   
@@ -513,6 +379,8 @@ export async function media(opts: MediaOptions): Promise<MediaResult> {
   // Denied (whether canAskAgain is true or false) or granted
   return result;
 }
+
+// ─── Public API ────────────────────────────────────────────────────────────────
 
 export const PermissionKit = {
   batteryOptimization,

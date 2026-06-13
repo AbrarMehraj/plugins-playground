@@ -1,6 +1,6 @@
 {
   "name": "@abrarmehraj/permission-kit",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "A developer-friendly permissions library for Expo and React Native. One call handles the full workflow — check, request, wait for app resume, return final status.",
   "main": "build/index.js",
   "module": "build/index.js",
