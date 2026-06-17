@@ -9,6 +9,86 @@ const result = await PermissionKit.notifications();
 // { status: 'granted' } or { status: 'denied' }
 ```
 
+## React Hooks API ✨
+
+For React components, PermissionKit provides a suite of custom hooks. They handle everything for you: checking permissions on mount, listening to app state changes (e.g. when the app resumes from the background), and managing native loading states.
+
+```ts
+import { 
+  useLocation, 
+  useMedia, 
+  useNotifications, 
+  useBatteryOptimization,
+  useOverlay,
+  useUsageStats,
+  useExactAlarm,
+  useFullScreenIntent,
+  useAccessibility,
+  useDndAccess
+} from '@abrarmehraj/permission-kit';
+```
+
+### Standard Hook Return Object
+All hooks return the exact same predictable object interface:
+
+```ts
+const { 
+  status,     // String: 'granted' | 'denied' | 'unavailable' | 'restricted'
+  success,    // Boolean: true if status === 'granted'
+  request,    // Function: Trigger the OS permission prompt
+  check,      // Function: Manually re-check the status
+  isLoading,  // Boolean: true while the OS prompt is open or data is fetching
+  result      // Object: The full raw result payload (useful for Location coordinates)
+} = useLocation();
+```
+
+### Passing Options to Hooks
+Hooks accept the **exact same options** as their async function counterparts!
+
+```ts
+// Example: Requesting photos with native iOS "limited" prompt
+const photoPerm = useMedia({ type: 'photo', requestMore: true });
+
+// Example: Location with high accuracy & GPS fetching
+const locationPerm = useLocation({ 
+  fetchCoordinates: true, 
+  accuracy: 'high', 
+  timeout: 15000 
+});
+
+// Example: Checking for a specific Accessibility Service
+const a11yPerm = useAccessibility({ 
+  androidServicePath: '.MyAccessibilityService' 
+});
+```
+
+### Full Example
+
+```tsx
+import { Button, Text, View } from 'react-native';
+import { useLocation } from '@abrarmehraj/permission-kit';
+
+export default function MyComponent() {
+  const { status, success, request, isLoading, result } = useLocation({ fetchCoordinates: true });
+
+  return (
+    <View>
+      <Text>Status: {status.toUpperCase()}</Text>
+      
+      {success && result && 'latitude' in result && (
+        <Text>📍 Lat: {result.latitude}, Lng: {result.longitude}</Text>
+      )}
+
+      <Button 
+        title={isLoading ? "Please wait..." : (success ? "Granted!" : "Request Location")} 
+        onPress={request} 
+        disabled={isLoading || success}
+      />
+    </View>
+  );
+}
+```
+
 ---
 
 ## Installation

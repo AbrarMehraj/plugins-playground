@@ -10,17 +10,16 @@ export interface AccessibilityOptions {
   androidServicePath: string;
 }
 
-export interface AlertConfig {
-  title: string;
-  description: string;
+export interface BaseAlertOptions {
+  /** If true, shows a native alert dialog when permission is permanently denied. Default: true */
+  showAlert?: boolean;
+  /** Custom title for the native alert dialog. */
+  alertTitle?: string;
+  /** Custom description for the native alert dialog. */
+  alertDescription?: string;
 }
 
-export interface NotificationOptions {
-  /** If true, shows a native alert dialog when permission is permanently denied. */
-  showAlertConfig?: boolean;
-  /** Optional text for the native alert dialog. Uses defaults if not provided. */
-  alertConfig?: AlertConfig;
-}
+export interface NotificationOptions extends BaseAlertOptions {}
 
 export type LocationPermissionStatus =
   | { status: 'granted' }
@@ -37,7 +36,7 @@ export type LocationResult =
 
 export type LocationAccuracy = 'high' | 'balanced' | 'low';
 
-export interface LocationOptions {
+export interface LocationOptions extends BaseAlertOptions {
   /** GPS timeout in milliseconds. Default: 10000ms */
   timeout?: number;
   /**
@@ -53,10 +52,6 @@ export interface LocationOptions {
    * Default: true
    */
   fetchCoordinates?: boolean;
-  /** If true, shows a native alert dialog when permission is permanently denied. */
-  showAlertConfig?: boolean;
-  /** Optional text for the native alert dialog. Uses defaults if not provided. */
-  alertConfig?: AlertConfig;
   /** If true, automatically shows native UI messages (Toast on Android, Alert on iOS) for common location errors like timeout or services disabled. Default: true */
   showErrorAlerts?: boolean;
   /** Custom messages to display when showErrorAlerts is true. */
@@ -241,10 +236,10 @@ export async function notifications(opts?: NotificationOptions) {
     };
   }
 
-  // Permanently denied — show native alert if caller opted in
-  if (opts?.showAlertConfig === true) {
-    const title = opts.alertConfig?.title ?? 'Notifications Required';
-    const description = opts.alertConfig?.description ?? 'Please enable notifications in Settings to continue.';
+  // Permanently denied — show native alert if caller opted in (default: true)
+  if (opts?.showAlert !== false) {
+    const title = opts?.alertTitle ?? 'Notifications Required';
+    const description = opts?.alertDescription ?? 'Please enable notifications in Settings to continue.';
     await NativeModule.showPermissionAlertAndOpenSettings(title, description, 'notifications');
   }
 
@@ -298,15 +293,15 @@ export async function location(opts?: LocationOptions): Promise<LocationResult> 
   //   - Both: Location Services OFF → error
   const result = await NativeModule.requestLocation(timeoutMs, accuracy);
 
-  // Show alert modal if permanently denied and caller opted in
+  // Show alert modal if permanently denied and caller opted in (default: true)
   if (
     result.status === 'denied' &&
     'canAskAgain' in result &&
     result.canAskAgain === false &&
-    opts?.showAlertConfig === true
+    opts?.showAlert !== false
   ) {
-    const title = opts.alertConfig?.title ?? 'Location Permission Required';
-    const description = opts.alertConfig?.description ?? 'Please enable location access in Settings to continue.';
+    const title = opts?.alertTitle ?? 'Location Permission Required';
+    const description = opts?.alertDescription ?? 'Please enable location access in Settings to continue.';
     await NativeModule.showPermissionAlertAndOpenSettings(title, description, 'location');
   }
 
