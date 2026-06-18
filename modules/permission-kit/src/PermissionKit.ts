@@ -1,68 +1,16 @@
 import { Alert, AppState, Platform, ToastAndroid } from 'react-native';
 import NativeModule from './ExpoPermissionKitModule';
-import { MediaOptions, MediaResult } from './types';
-
-// ─── Shared Types ──────────────────────────────────────────────────────────────
-
-type AndroidSettingsResult = { status: 'granted' | 'denied' | 'unavailable' };
-
-export interface AccessibilityOptions {
-  androidServicePath: string;
-}
-
-export interface BaseAlertOptions {
-  /** If true, shows a native alert dialog when permission is permanently denied. Default: true */
-  showAlert?: boolean;
-  /** Custom title for the native alert dialog. */
-  alertTitle?: string;
-  /** Custom description for the native alert dialog. */
-  alertDescription?: string;
-}
-
-export interface NotificationOptions extends BaseAlertOptions {}
-
-export type LocationPermissionStatus =
-  | { status: 'granted' }
-  | { status: 'denied'; canAskAgain: boolean; error?: 'LOCATION_SERVICES_DISABLED' }
-  | { status: 'restricted' }
-  | { status: 'unavailable' };
-
-export type LocationResult =
-  | { status: 'granted'; latitude: number; longitude: number; accuracy: number; altitude: number; timestamp: number }
-  | { status: 'granted'; error: 'TIMEOUT' | 'LOCATION_UNAVAILABLE' }
-  | { status: 'denied'; canAskAgain?: boolean; error?: 'LOCATION_SERVICES_DISABLED' }
-  | { status: 'restricted' }
-  | { status: 'unavailable' };
-
-export type LocationAccuracy = 'high' | 'balanced' | 'low';
-
-export interface LocationOptions extends BaseAlertOptions {
-  /** GPS timeout in milliseconds. Default: 10000ms */
-  timeout?: number;
-  /**
-   * Location accuracy level. Default: 'balanced'.
-   * - 'high': GPS-level precision (~5m). Slower, uses more battery.
-   * - 'balanced': Wi-Fi/Cell tower precision (~100m). Fast, battery-friendly.
-   * - 'low': City-level precision (~1km). Fastest, minimal battery.
-   */
-  accuracy?: LocationAccuracy;
-  /**
-   * If false, only requests the permission without fetching GPS coordinates.
-   * Resolves with { status: 'granted' } immediately after permission is granted.
-   * Default: true
-   */
-  fetchCoordinates?: boolean;
-  /** If true, automatically shows native UI messages (Toast on Android, Alert on iOS) for common location errors like timeout or services disabled. Default: true */
-  showErrorAlerts?: boolean;
-  /** Custom messages to display when showErrorAlerts is true. */
-  errorMessages?: {
-    servicesDisabled?: string;
-    timeout?: string;
-    unavailable?: string;
-  };
-}
-
-// ─── Internal Helpers ──────────────────────────────────────────────────────────
+import {
+  AccessibilityOptions,
+  AndroidSettingsResult,
+  BaseAlertOptions,
+  LocationOptions,
+  LocationPermissionStatus,
+  LocationResult,
+  MediaOptions,
+  MediaResult,
+  NotificationOptions
+} from './types';
 
 /** Fallback native message (Toast for Android, Alert for iOS) */
 const showNativeMessage = (message: string) => {
@@ -90,6 +38,22 @@ function waitForResume(): Promise<void> {
       }
     });
   });
+}
+
+/** Handles the native alert popup when a runtime permission is permanently denied. */
+async function handlePermanentDenialAlert(
+  status: string,
+  canAskAgain: boolean | undefined,
+  settingsType: 'notifications' | 'location' | 'media',
+  opts?: BaseAlertOptions,
+  defaultTitle?: string,
+  defaultDescription?: string
+) {
+  if (status === 'denied' && canAskAgain === false && opts?.showAlert !== false) {
+    const title = opts?.alertTitle ?? defaultTitle ?? `${settingsType} Permission Required`;
+    const description = opts?.alertDescription ?? defaultDescription ?? `Please enable ${settingsType} access in Settings to continue.`;
+    await NativeModule!.showPermissionAlertAndOpenSettings(title, description, settingsType);
+  }
 }
 
 /**
@@ -237,11 +201,14 @@ export async function notifications(opts?: NotificationOptions) {
   }
 
   // Permanently denied — show native alert if caller opted in (default: true)
-  if (opts?.showAlert !== false) {
-    const title = opts?.alertTitle ?? 'Notifications Required';
-    const description = opts?.alertDescription ?? 'Please enable notifications in Settings to continue.';
-    await NativeModule.showPermissionAlertAndOpenSettings(title, description, 'notifications');
-  }
+  await handlePermanentDenialAlert(
+    'denied',
+    false,
+    'notifications',
+    opts,
+    'Notifications Required',
+    'Please enable notifications in Settings to continue.'
+  );
 
   return { status: 'denied' as const, canAskAgain: false };
 }
@@ -294,16 +261,14 @@ export async function location(opts?: LocationOptions): Promise<LocationResult> 
   const result = await NativeModule.requestLocation(timeoutMs, accuracy);
 
   // Show alert modal if permanently denied and caller opted in (default: true)
-  if (
-    result.status === 'denied' &&
-    'canAskAgain' in result &&
-    result.canAskAgain === false &&
-    opts?.showAlert !== false
-  ) {
-    const title = opts?.alertTitle ?? 'Location Permission Required';
-    const description = opts?.alertDescription ?? 'Please enable location access in Settings to continue.';
-    await NativeModule.showPermissionAlertAndOpenSettings(title, description, 'location');
-  }
+  await handlePermanentDenialAlert(
+    result.status,
+    'canAskAgain' in result ? result.canAskAgain : undefined,
+    'location',
+    opts,
+    'Location Permission Required',
+    'Please enable location access in Settings to continue.'
+  );
 
   // Show native error toasts/alerts by default (unless explicitly opted out)
   const showErrorAlerts = opts?.showErrorAlerts ?? true;
@@ -370,6 +335,16 @@ export async function media(opts: MediaOptions): Promise<MediaResult> {
     }
     throw error;
   }
+
+  // Show native alert modal if permanently denied and caller opted in (default: true)
+  await handlePermanentDenialAlert(
+    result.status,
+    result.canAskAgain,
+    'media',
+    opts,
+    'Media Permission Required',
+    'Please enable media access in Settings to continue.'
+  );
 
   // Denied (whether canAskAgain is true or false) or granted
   return result;

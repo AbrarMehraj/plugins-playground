@@ -191,7 +191,7 @@ Add the required permissions to your `android/app/src/main/AndroidManifest.xml` 
 
 ## API
 
-### `PermissionKit.media({ type, requestMore? })`
+### `PermissionKit.media(options)`
 
 Automatically resolves Android fragmentation (Android 14+, Android 13, Android < 13) and iOS restricted modes into a simple API.
 
@@ -200,7 +200,13 @@ import { PermissionKit } from '@abrarmehraj/permission-kit';
 
 // type: 'photo' | 'video' | 'audio' | 'all'
 // requestMore (optional): Set to true to pop up the native OS picker when status is 'limited' so users can add more photos.
-const result = await PermissionKit.media({ type: 'photo', requestMore: true });
+// showAlert (optional): If true, automatically shows a native alert if permanently denied. Default: true.
+// alertTitle / alertDescription (optional): Custom text for the settings fallback alert.
+const result = await PermissionKit.media({ 
+  type: 'photo', 
+  requestMore: true,
+  showAlert: true 
+});
 
 if (result.status === 'granted') {
   // You have full access. Safe to open your image picker.
