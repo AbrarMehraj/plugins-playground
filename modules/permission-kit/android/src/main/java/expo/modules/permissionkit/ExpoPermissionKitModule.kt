@@ -688,15 +688,28 @@ class ExpoPermissionKitModule : Module() {
       
       // [FIX]: Android 14+ compat mode detection.
       // Even when the user selects "Limited" photos, Android technically grants READ_MEDIA_IMAGES 
-      // but in a restricted compatibility mode. We must manually override 'granted' to false 
-      // if READ_MEDIA_VISUAL_USER_SELECTED is granted, so the library correctly reports "limited".
+      // but in a restricted compatibility mode. We must check AppOpsManager to verify if it's truly Full access.
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
           (perm == "android.permission.READ_MEDIA_IMAGES" || perm == "android.permission.READ_MEDIA_VIDEO")) {
           
           val userSelected = response["android.permission.READ_MEDIA_VISUAL_USER_SELECTED"]
           if (userSelected?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED) {
-              granted = false
-              isLimited = true
+              
+              val context = appContext.reactContext
+              val appOpsManager = context?.getSystemService(android.content.Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
+              val opStr = if (perm == "android.permission.READ_MEDIA_IMAGES") "android:read_media_images" else "android:read_media_video"
+              
+              val mode = appOpsManager?.unsafeCheckOpNoThrow(
+                  opStr,
+                  android.os.Process.myUid(),
+                  context.packageName
+              )
+              
+              // If the mode is not MODE_ALLOWED, it means it's limited access
+              if (mode != android.app.AppOpsManager.MODE_ALLOWED) {
+                  granted = false
+                  isLimited = true
+              }
           }
       }
       if (!granted) {
