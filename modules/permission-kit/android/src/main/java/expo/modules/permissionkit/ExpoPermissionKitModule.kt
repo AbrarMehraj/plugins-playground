@@ -684,19 +684,24 @@ class ExpoPermissionKitModule : Module() {
 
     for ((perm, permResponse) in response) {
       android.util.Log.d("PermissionKit", "Perm: $perm, status: ${permResponse.status}, canAskAgain: ${permResponse.canAskAgain}")
-      val granted = permResponse.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED
+      var granted = permResponse.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED
+      
+      // [FIX]: Android 14+ compat mode detection.
+      // Even when the user selects "Limited" photos, Android technically grants READ_MEDIA_IMAGES 
+      // but in a restricted compatibility mode. We must manually override 'granted' to false 
+      // if READ_MEDIA_VISUAL_USER_SELECTED is granted, so the library correctly reports "limited".
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+          (perm == "android.permission.READ_MEDIA_IMAGES" || perm == "android.permission.READ_MEDIA_VIDEO")) {
+          
+          val userSelected = response["android.permission.READ_MEDIA_VISUAL_USER_SELECTED"]
+          if (userSelected?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED) {
+              granted = false
+              isLimited = true
+          }
+      }
       if (!granted) {
         if (!permResponse.canAskAgain) {
           canAskAgain = false
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-            (perm == "android.permission.READ_MEDIA_IMAGES" || perm == "android.permission.READ_MEDIA_VIDEO")) {
-          val userSelected = response["android.permission.READ_MEDIA_VISUAL_USER_SELECTED"]
-          if (userSelected?.status == expo.modules.interfaces.permissions.PermissionsStatus.GRANTED) {
-            isLimited = true
-            allGranted = false
-            continue
-          }
         }
         allGranted = false
       }
