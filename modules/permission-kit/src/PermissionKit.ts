@@ -91,7 +91,7 @@ async function requestAndroidSettingsPermission(
   } catch (error: any) {
     if (error?.message?.includes('MISSING_PERMISSION')) {
       console.warn(
-        `[@abrarmehraj/permission-kit] Missing Permission: You forgot to add '${pluginName}' to your app.json plugin.`
+        `[react-native-permission-flow] Missing Permission: You forgot to add '${pluginName}' to your app.json plugin.`
       );
       return { status: 'denied' };
     }
@@ -329,7 +329,7 @@ export async function media(opts: MediaOptions): Promise<MediaResult> {
   } catch (error: any) {
     if (error?.message?.includes('MISSING_PERMISSION')) {
       console.warn(
-        `[@abrarmehraj/permission-kit] Missing Permission: You forgot to add 'media' to your app.json plugin.`
+        `[react-native-permission-flow] Missing Permission: You forgot to add 'media' to your app.json plugin.`
       );
       return { status: 'denied' };
     }

@@ -1,4 +1,7 @@
-# @abrarmehraj/permission-kit
+# react-native-permission-flow
+
+> [!WARNING]
+> **Migration Notice:** This package was formerly known as `@abrarmehraj/permission-kit`. If you are upgrading, please uninstall the old package and install `react-native-permission-flow`. Update all imports in your code and the plugin name in your `app.json`.
 
 A developer-friendly permissions library for **Expo** and **React Native**.
 
@@ -25,7 +28,7 @@ import {
   useFullScreenIntent,
   useAccessibility,
   useDndAccess
-} from '@abrarmehraj/permission-kit';
+} from 'react-native-permission-flow';
 ```
 
 ### Standard Hook Return Object
@@ -66,7 +69,7 @@ const a11yPerm = useAccessibility({
 
 ```tsx
 import { Button, Text, View } from 'react-native';
-import { useLocation } from '@abrarmehraj/permission-kit';
+import { useLocation } from 'react-native-permission-flow';
 
 export default function MyComponent() {
   const { status, success, request, isLoading, result } = useLocation({ fetchCoordinates: true });
@@ -94,11 +97,11 @@ export default function MyComponent() {
 ## Installation
 
 ```bash
-npm install @abrarmehraj/permission-kit
+npm install react-native-permission-flow
 # or
-yarn add @abrarmehraj/permission-kit
+yarn add react-native-permission-flow
 # or
-pnpm add @abrarmehraj/permission-kit
+pnpm add react-native-permission-flow
 ```
 
 ## Setup
@@ -114,7 +117,7 @@ In your `app.json`, add the plugin and specify the permissions you want:
   "expo": {
     "plugins": [
       [
-        "@abrarmehraj/permission-kit",
+        "react-native-permission-flow",
         {
           "permissions": ["batteryOptimization", "overlay", "usageStats", "exactAlarm", "fullScreenIntent", "dndAccess", "notifications", "location", "media:photo", "media:video"],
           "locationDescription": "Used to show your current position.",
@@ -196,7 +199,7 @@ Add the required permissions to your `android/app/src/main/AndroidManifest.xml` 
 Automatically resolves Android fragmentation (Android 14+, Android 13, Android < 13) and iOS restricted modes into a simple API.
 
 ```ts
-import { PermissionKit } from '@abrarmehraj/permission-kit';
+import { PermissionKit } from 'react-native-permission-flow';
 
 // type: 'photo' | 'video' | 'audio' | 'all'
 // requestMore (optional): Set to true to pop up the native OS picker when status is 'limited' so users can add more photos.
@@ -237,7 +240,7 @@ const result = await PermissionKit.checkMedia({ type: 'photo' });
 Checks if battery optimization is disabled for your app. If not, automatically opens the Android Settings dialog and waits for the user to return. Re-checks on resume.
 
 ```ts
-import { PermissionKit } from '@abrarmehraj/permission-kit';
+import { PermissionKit } from 'react-native-permission-flow';
 
 const result = await PermissionKit.batteryOptimization();
 
