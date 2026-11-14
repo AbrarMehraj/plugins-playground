@@ -58,9 +58,16 @@ function createPermissionHook<
     const optionsStr = JSON.stringify(args);
 
     const isInitialMount = useRef(true);
+    // Requests still running. `isLoading` stays true until the last one finishes: a check that runs meanwhile
+    // (e.g. on AppState 'active' when the permission dialog closes) must not end it while a request is still
+    // working, such as fetching the location after the permission was granted.
+    const pendingRequests = useRef(0);
 
     const check = useCallback(async (...argsOverride: HookParams | []): Promise<Status> => {
-      if (isInitialMount.current) {
+      // Only the first check shows loading, and never on top of a running request
+      const ownsLoading = isInitialMount.current && pendingRequests.current === 0;
+      isInitialMount.current = false;
+      if (ownsLoading) {
         setIsLoading(true);
       }
 
@@ -72,14 +79,16 @@ function createPermissionHook<
         setStatus(newStatus as Status);
         return newStatus as Status;
       } finally {
-        if (isInitialMount.current) {
+        if (ownsLoading && pendingRequests.current === 0) {
           setIsLoading(false);
-          isInitialMount.current = false;
         }
       }
     }, [optionsStr]);
 
     const request = useCallback(async (...argsOverride: HookParams | []): Promise<ReqRes> => {
+      pendingRequests.current += 1;
+      // A request (autoRequest included) counts as the first load: later checks don't show loading
+      isInitialMount.current = false;
       setIsLoading(true);
       try {
         const callArgs = argsOverride.length > 0 ? argsOverride : argsRef.current;
@@ -90,7 +99,10 @@ function createPermissionHook<
         setFullResult(result as ReqRes);
         return result as ReqRes;
       } finally {
-        setIsLoading(false);
+        pendingRequests.current -= 1;
+        if (pendingRequests.current === 0) {
+          setIsLoading(false);
+        }
       }
     }, [optionsStr]);
 
